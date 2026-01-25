@@ -11,3 +11,4 @@ app.config["DB_URI"] = config["PROD"]["DB_URI"]
 
 if __name__ == "__main__":
     app.run(port=5000)
+    

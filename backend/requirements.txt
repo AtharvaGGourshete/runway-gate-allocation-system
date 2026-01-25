@@ -1,4 +1,13 @@
 flask
 flask-cors
+openai
+langchain==1.2.7
+langgraph
+simpy
+ortools
 pymongo
 dnspython
+numpy
+pandas
+motor
+python-dotenv
