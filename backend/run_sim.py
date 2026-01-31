@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 if __name__ == "__main__":
-    print("Starting simulation...")
-    run_simulation()
-    print("Simulation complete.")
+    try:
+        print("Starting simulation...")
+        run_simulation()
+        print("Simulation complete.")
+    except KeyboardInterrupt:
+        print("Simulation manually stopped by the user.")

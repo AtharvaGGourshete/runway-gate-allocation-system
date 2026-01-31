@@ -232,7 +232,7 @@ export default function Home() {
                   {item.title}
                 </h3>
 
-                <p className="text-gray-400 text-sm leading-relaxed max-w-[280px]">
+                <p className="text-gray-400 text-sm leading-relaxed max-w-70">
                   {item.description}
                 </p>
               </div>
