@@ -1,19 +1,20 @@
 # --- Core Framework (Pinned for Compatibility) ---
-langchain==0.1.20
-langchain-core==0.1.52
-langchain-community==0.0.38
-langgraph==0.0.39
+langchain
+langchain-core
+langchain-community
+langgraph
 
 # --- Google Gemini Integration ---
 # Note: Version 1.0.1 is required to support the older langchain-core above.
-langchain-google-genai==1.0.1
+langchain-google-genai
 
 # --- Other Integrations ---
 flask
 flask-cors
 openai
-langchain-together==0.0.2
+langchain-together
 langchain-groq
+langchain-anthropic
 python-dotenv
 
 # --- Simulation & Tools ---

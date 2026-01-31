@@ -6,6 +6,7 @@ from app.db.queries import (
     log_event, save_flight, save_gate, save_runway,
     update_gate_status, update_runway_status
 )
+from langchain_core.messages import HumanMessage
 from app.db.models.flight import Flight
 from app.db.models.gate import Gate
 from app.db.models.runway import Runway
@@ -62,9 +63,14 @@ def flight_lifecycle(env, flight_id, agent, api_resource):
                 try:
                     log_event("agent_invoked", flight_id=flight_id, action="Invoking agent")
 
-                    # UPDATED: AgentExecutor uses 'input' and returns 'output'
-                    result = agent.invoke({"input": prompt_text})
-                    raw_content = result["output"]
+                    # UPDATED: CompiledStateGraph uses 'messages' format
+                    result = agent.invoke({
+                        "messages": [HumanMessage(content=prompt_text)]
+                    })
+                    
+                    # Extract the last message from the agent
+                    last_message = result["messages"][-1]
+                    raw_content = last_message.content
 
                     # Clean up markdown if Gemini includes it
                     json_str = raw_content.replace("```json", "").replace("```", "").strip()
