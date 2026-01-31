@@ -1,117 +1,142 @@
 import simpy
 import random
 import json
+from langchain_core.messages import HumanMessage
+
 from app.agents.flight_agent import build_flight_agent
 from app.db.queries import (
     log_event, save_flight, save_gate, save_runway,
     update_gate_status, update_runway_status
 )
-from langchain_core.messages import HumanMessage
 from app.db.models.flight import Flight
 from app.db.models.gate import Gate
 from app.db.models.runway import Runway
 
-# Configuration
 NUM_FLIGHTS = 15
 GATES = ["G1", "G2", "G3"]
 RUNWAYS = ["R1", "R2"]
-MAX_LLM_CALLS = 3
 
-# State tracking
-gate_status = {g: None for g in GATES}
-runway_status = {r: None for r in RUNWAYS}
-llm_calls = 0
-
-def deterministic_assign(flight_id):
-    """Simple logic to avoid LLM calls when obvious."""
-    free_gates = [g for g, v in gate_status.items() if v is None]
-    free_runways = [r for r, v in runway_status.items() if v is None]
-
-    if not free_gates or not free_runways:
-        return None, None
-    if len(free_gates) == 1 and len(free_runways) == 1:
-        return free_gates[0], free_runways[0]
-    return "AMBIGUOUS", "AMBIGUOUS"
+gate_status = {g: "available" for g in GATES}
+runway_status = {r: "available" for r in RUNWAYS}
 
 def flight_lifecycle(env, flight_id, agent, api_resource):
-    global llm_calls
+    # Random arrival time
     yield env.timeout(random.randint(1, 10))
 
-    assigned_gate, assigned_runway = deterministic_assign(flight_id)
+    log_event("flight_arrived", flight_id=flight_id, action="Flight arrived")
 
-    if assigned_gate == "AMBIGUOUS":
-        if llm_calls >= MAX_LLM_CALLS:
-            # Fallback to first available if limit reached
-            free_gates = [g for g, v in gate_status.items() if v is None]
-            free_runways = [r for r, v in runway_status.items() if v is None]
-            assigned_gate = free_gates[0] if free_gates else None
-            assigned_runway = free_runways[0] if free_runways else None
-        else:
-            with api_resource.request() as req:
-                yield req
-                llm_calls += 1
-                yield env.timeout(5)
-                print(f"[SimPy Time: {env.now}] Flight {flight_id} calling model...")
+    with api_resource.request() as req:
+        yield req
 
-                prompt_text = (
-                    f"Assign gate and runway for flight {flight_id}. "
-                    f"Available gates: {gate_status}. "
-                    f"Available runways: {runway_status}. "
-                    "Respond ONLY with JSON."
-                )
+        yield env.timeout(5)
+        print(f"[SimPy Time: {env.now}] Flight {flight_id} calling model...")
 
-                try:
-                    log_event("agent_invoked", flight_id=flight_id, action="Invoking agent")
+        prompt = (
+            f"You are an airport scheduling agent.\n"
+            f"Current gate status: {gate_status}\n"
+            f"Current runway status: {runway_status}\n"
+            f"Assign ONE available gate and ONE available runway to flight {flight_id}.\n"
+            f"Respond ONLY in JSON:\n"
+            f'{{"assigned_gate": "G1", "assigned_runway": "R1"}}'
+        )
 
-                    # UPDATED: CompiledStateGraph uses 'messages' format
-                    result = agent.invoke({
-                        "messages": [HumanMessage(content=prompt_text)]
-                    })
-                    
-                    # Extract the last message from the agent
-                    last_message = result["messages"][-1]
-                    raw_content = last_message.content
+        try:
+            log_event("agent_invoked", flight_id=flight_id, action="Invoking LLM")
 
-                    # Clean up markdown if Gemini includes it
-                    json_str = raw_content.replace("```json", "").replace("```", "").strip()
-                    response = json.loads(json_str)
+            result = agent.invoke({
+                "messages": [HumanMessage(content=prompt)]
+            })
 
-                    assigned_gate = response["assigned_gate"]
-                    assigned_runway = response["assigned_runway"]
+            raw = result["messages"][-1].content
+            raw = raw.replace("```json", "").replace("```", "").strip()
 
-                    log_event("agent_response", flight_id=flight_id, action=raw_content)
-                    print(f"[Agent Success] {flight_id} assigned to {assigned_gate}/{assigned_runway}")
+            response = json.loads(raw)
+            assigned_gate = response["assigned_gate"]
+            assigned_runway = response["assigned_runway"]
 
-                except Exception as e:
-                    log_event("error", flight_id=flight_id, action=str(e))
-                    print(f"[LLM Error] {flight_id}: {e}")
-                    return
+            log_event("agent_response", flight_id=flight_id, action=raw)
+            print(f"[Agent] {flight_id} → {assigned_gate}/{assigned_runway}")
 
-    # Resource allocation and Database logging
-    if assigned_gate and assigned_runway:
-        gate_status[assigned_gate] = flight_id
-        runway_status[assigned_runway] = flight_id
+        except Exception as e:
+            log_event("error", flight_id=flight_id, action=str(e))
+            print(f"[LLM Error] {flight_id}: {e}")
+            return
 
-        # Simulating landing and gate occupancy
-        yield env.timeout(20)
+    if gate_status.get(assigned_gate) != "available" or runway_status.get(assigned_runway) != "available":
+        log_event(
+            "invalid_assignment",
+            flight_id=flight_id,
+            action=f"Gate {assigned_gate} or Runway {assigned_runway} unavailable"
+        )
+        print(f"[Invalid Assignment] {flight_id}")
+        return
+    
+    gate_status[assigned_gate] = "occupied"
+    runway_status[assigned_runway] = "occupied"
 
-        # Release resources
-        gate_status[assigned_gate] = None
-        runway_status[assigned_runway] = None
-        print(f"[SimPy Time: {env.now}] Flight {flight_id} released resources.")
+    # Save Flight
+    flight = Flight(
+        flight_id=flight_id,
+        status="arrived",
+        arrival_time=env.now,
+        assigned_gate=assigned_gate,
+        assigned_runway=assigned_runway,
+        delay=0,
+        position=(random.randint(0, 10), random.randint(0, 10))
+    )
+    save_flight(flight)
+
+    # Save Gate
+    save_gate(Gate(
+        gate_id=assigned_gate,
+        occupied_by=flight_id,
+        status="occupied"
+    ))
+
+    # Save Runway
+    save_runway(Runway(
+        runway_id=assigned_runway,
+        occupied_by=flight_id,
+        status="occupied"
+    ))
+
+    log_event(
+        "resource_allocated",
+        flight_id=flight_id,
+        action=f"Gate {assigned_gate}, Runway {assigned_runway}"
+    )
+
+    yield env.timeout(20)
+    gate_status[assigned_gate] = "available"
+    runway_status[assigned_runway] = "available"
+
+    update_gate_status(assigned_gate, "available")
+    update_runway_status(assigned_runway, "available")
+
+    log_event(
+        "resource_released",
+        flight_id=flight_id,
+        action=f"Gate {assigned_gate} and Runway {assigned_runway} released"
+    )
+
+    print(f"[SimPy Time: {env.now}] Flight {flight_id} released resources")
 
 def run_simulation():
     env = simpy.Environment()
+
+    # 🔒 Hard throttle: only ONE LLM call globally
     api_resource = simpy.Resource(env, capacity=1)
+
     agent = build_flight_agent()
 
     for i in range(NUM_FLIGHTS):
         flight_id = f"F{i+1}"
         env.process(flight_lifecycle(env, flight_id, agent, api_resource))
 
-    print("--- Starting Simulation ---")
+    print("=== Starting Simulation ===")
     env.run(until=500)
-    print("--- Simulation Complete ---")
+    print("=== Simulation Complete ===")
+
 
 if __name__ == "__main__":
     run_simulation()
