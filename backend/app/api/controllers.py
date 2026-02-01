@@ -1,9 +1,10 @@
 from flask import Blueprint, jsonify
 from app.db.mongo import get_db
+from app.db.queries import get_all_flights, get_active_flights
 
-health_api = Blueprint("health_api", __name__)
+dash = Blueprint("health_api", __name__)
 
-@health_api.route("/health", methods=["GET"])
+@dash.route("/health", methods=["GET"])
 def health_check():
     return jsonify({
         "status": "ok",
@@ -11,7 +12,7 @@ def health_check():
     })
 
 
-@health_api.route("/db-check", methods=["GET"])
+@dash.route("/db-check", methods=["GET"])
 def db_check():
     try:
         db = get_db()
@@ -33,3 +34,10 @@ def db_check():
             "db_connected": False,
             "error": str(e)
         }), 500
+
+@dash.route("/dashboard")
+def all_flights():
+    return jsonify(get_all_flights())
+
+def active_flights():
+    return jsonify(get_active_flights())

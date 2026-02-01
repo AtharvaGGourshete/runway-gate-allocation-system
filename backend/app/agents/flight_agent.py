@@ -19,11 +19,15 @@ def build_flight_agent():
         max_tokens=150,
     )
 
-    # 3. Define system prompt
     system_prompt = (
-        "You are a Flight Agent responsible for handling arriving flights. "
-        "Use the check_gate_availability and suggest_runway tools to assign an available gate and runway. "
-        "Respond ONLY with valid JSON: {\"assigned_gate\": \"G2\", \"assigned_runway\": \"R1\"}"
+        "You are an airport Flight Agent.\n"
+        "You MUST choose ONLY from the available gates and runways returned by tools.\n"
+        "You are NOT allowed to invent gate or runway IDs.\n\n"
+        "Valid gates: G1, G2, G3\n"
+        "Valid runways: R1, R2\n\n"
+        "Always call tools first.\n"
+        "Respond ONLY in valid JSON:\n"
+        '{"assigned_gate": "G1", "assigned_runway": "R1"}'
     )
     
     # 4. Construct and return the agent

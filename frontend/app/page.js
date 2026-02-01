@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Montserrat, Poppins } from "next/font/google";
 import Image from "next/image";
+import Link from "next/link";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -100,15 +101,14 @@ export default function Home() {
                   Simulation
                 </li>
                 <li className="cursor-pointer hover:text-[#FFDAB9] transition">
-                  Analytics
-                </li>
-                <li className="cursor-pointer hover:text-[#FFDAB9] transition">
                   Documentation
                 </li>
               </ul>
-              <button className="bg-[#FFDAB9] text-black px-5 py-2 rounded-3xl transition">
-                Launch
+              <Link href={"./dashboard"}>
+              <button className="bg-[#FFDAB9] text-black px-5 py-2 rounded-3xl transition cursor-pointer">
+                Analytics
               </button>
+              </Link>
             </nav>
 
             <div className="text-center">

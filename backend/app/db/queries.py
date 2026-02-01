@@ -46,3 +46,17 @@ def update_runway_status(runway_id: str, status: str):
         {"runway_id": runway_id},
         {"$set": {"status": status, "occupied_by": None}}
     )
+
+def get_all_flights():
+    db = get_db()
+    flights = list(db["flight"].find({}, {"_id": 0}))
+    return flights
+
+def get_active_flights():
+    db = get_db()
+    return list(
+        db["flight"].find(
+            {"status": {"$in": ["arriving", "landing", "taxiing"]}},
+            {"_id": 0}
+        )
+    )
