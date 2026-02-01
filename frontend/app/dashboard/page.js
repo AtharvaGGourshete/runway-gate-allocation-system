@@ -62,7 +62,7 @@ const Page = () => {
 
         {/* Full Tabular Flight Log */}
         <div className="bg-[#1c1c1c] rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[70vh]">
-          <div className="p-5 border-b border-white/5 bg-white/[0.02] flex justify-between items-center sticky top-0 z-10 backdrop-blur-md">
+          <div className="p-5 border-b border-white/5 bg-white/2 flex justify-between items-center sticky top-0 z-10 backdrop-blur-md">
             <div>
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Activity className="text-[#f7c576]" size={20} />
@@ -93,7 +93,7 @@ const Page = () => {
               <tbody className="font-mono text-sm">
                 {flights.length > 0 ? (
                   flights.map((f) => (
-                    <tr key={f.flight_id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors group">
+                    <tr key={f.flight_id} className="border-b border-white/5 hover:bg-white/3 transition-colors group">
                       <td className="p-5">
                         <div className="flex items-center gap-3">
                           <Plane size={14} className="text-[#f7c576] opacity-50" />
@@ -135,7 +135,7 @@ const Page = () => {
           </div>
           
           <div className="p-3 bg-black/20 text-center border-t border-white/5">
-             <span className="text-[10px] text-gray-600 uppercase tracking-widest tracking-[0.3em]">
+             <span className="text-[10px] text-gray-600 uppercase tracking-widest">
                MAS Engine: Chronological Feed (Newest First)
              </span>
           </div>
