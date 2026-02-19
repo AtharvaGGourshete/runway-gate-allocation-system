@@ -1,0 +1,11 @@
+{
+    "python.analysis.extraPaths": [
+        "./backend/app/services"
+    ],
+    "mdb.presetConnections": [
+        {
+            "name": "Preset Connection",
+            "connectionString": "mongodb://localhost:27017"
+        }
+    ]
+}

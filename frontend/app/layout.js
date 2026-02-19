@@ -1,6 +1,9 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Footer from "@/components/Footer";
+// import "mapbox-gl/dist/mapbox-gl.css";
+import "leaflet/dist/leaflet.css";
+
 
 const inter = Inter({
   variable: "--font-geist-sans",

@@ -60,3 +60,48 @@ def get_active_flights():
             {"_id": 0}
         )
     )
+def save_schedule_version(version, current_time, freeze_window, planning_horizon):
+    db = get_db()
+    db["schedule_meta"].insert_one({
+        "version": version,
+        "run_time": datetime.utcnow().timestamp(),
+        "current_time": current_time,
+        "freeze_window": freeze_window,
+        "planning_horizon": planning_horizon
+    })
+
+def save_schedule_assignments(schedule, version, freeze_end):
+    db = get_db()
+
+    # Remove old non-frozen future schedule
+    db["schedule"].delete_many({"frozen": False})
+
+    for s in schedule:
+
+        is_frozen = s["landing_time"] < freeze_end
+
+        db["schedule"].update_one(
+            {"flight_id": s["flight_id"]},
+            {
+                "$set": {
+                    "landing_time": s["landing_time"],
+                    "gate": s["gate"],
+                    "gate_arrival": s["gate_arrival"],
+                    "gate_departure": s["gate_departure"],
+                    "takeoff_time": s["takeoff_time"],
+                    "frozen": is_frozen,
+                    "schedule_version": version,
+                    "created_at": datetime.utcnow().timestamp()
+                }
+            },
+            upsert=True
+        )
+
+def get_committed_schedule():
+    db = get_db()
+    return list(
+        db["schedule"].find(
+            {"frozen": True},
+            {"_id": 0}
+        )
+    )

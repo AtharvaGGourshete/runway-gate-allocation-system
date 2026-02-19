@@ -1,144 +1,121 @@
+# app/simulation/environment.py
 import simpy
 import random
 import json
 from langchain_core.messages import HumanMessage
 
-from app.agents.flight_agent import build_flight_agent
-from app.simulation.state import gate_status, runway_status
-from app.db.queries import (
-    log_event,
-    save_flight,
-    save_gate,
-    save_runway,
-    update_gate_status,
-    update_runway_status,
-)
+# Import the NEW scheduler agent
+from app.agents.scheduler_agent import build_scheduler_agent
+from app.simulation.state import GATES, RUNWAYS, gate_status, runway_status
+from app.db.queries import log_event, save_flight, save_gate, save_runway, update_gate_status, update_runway_status
 from app.db.models.flight import Flight
 from app.db.models.gate import Gate
 from app.db.models.runway import Runway
 
 NUM_FLIGHTS = 15
 
-def safe_parse_json(result):
-    last_msg = result["messages"][-1]
-
-    if not last_msg.content:
-        raise ValueError("Empty LLM response")
-
-    raw = last_msg.content.strip()
-    raw = raw.replace("```json", "").replace("```", "").strip()
-
+def safe_parse_json(content):
+    if not content: raise ValueError("Empty response")
+    raw = content.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(raw)
 
-def flight_lifecycle(env, flight_id, agent, api_resource):
+# --- 1. THE EXECUTION PHASE (SimPy) ---
+# This function is now "Dumb" but Fast. It just follows orders.
+def flight_lifecycle(env, flight_id, assigned_data):
+    # Unpack the specific assignment for this flight
+    my_gate = assigned_data['assigned_gate']
+    my_runway = assigned_data['assigned_runway']
+    
+    # Simulate Arrival Variance
     yield env.timeout(random.randint(1, 10))
-    log_event("flight_arrived", flight_id, action="Flight arrived")
+    log_event("flight_arrived", flight_id, action=f"Arrived. Assigned to {my_gate}/{my_runway}")
 
-    with api_resource.request() as req:
-        yield req
-        yield env.timeout(5)
+    print(f"[SimPy Time: {env.now}] {flight_id} requesting {my_runway} -> {my_gate}")
 
-        print(f"[SimPy Time: {env.now}] Flight {flight_id} calling model...")
+    # 1. Request Runway (The Plan says R1, but is R1 actually free?)
+    # Note: In a full SimPy implementation, you'd use simpy.Resource for the runway.
+    # For now, we update the status dict to mimic your original code.
+    
+    if runway_status[my_runway] == "available":
+        runway_status[my_runway] = "occupied"
+        update_runway_status(my_runway, "occupied")
+    else:
+        print(f"[Conflict] {flight_id} waiting for {my_runway}...")
+        # Simple wait logic
+        while runway_status[my_runway] != "available":
+            yield env.timeout(1)
+        runway_status[my_runway] = "occupied"
 
-        prompt = (
-            f"Flight {flight_id} has arrived.\n"
-            "Use tools to find an available gate and runway.\n"
-            "Return only JSON."
-        )
+    # 2. Taxi and Request Gate
+    yield env.timeout(5) # Taxi time
+    
+    if gate_status[my_gate] == "available":
+        gate_status[my_gate] = "occupied"
+        update_gate_status(my_gate, "occupied")
+    else:
+        # The Schedule said Gate 1, but SimPy reality says it's busy.
+        # This is where SimPy proves its value (Detecting bottlenecks).
+        print(f"[CRITICAL] {flight_id} blocked at {my_gate}!")
+        while gate_status[my_gate] != "available":
+            yield env.timeout(1)
+        gate_status[my_gate] = "occupied"
 
-        try:
-            log_event("agent_invoked", flight_id, action="Invoking LLM")
-
-            result = agent.invoke({
-                "messages": [HumanMessage(content=prompt)]
-            })
-
-            response = safe_parse_json(result)
-            assigned_gate = response["assigned_gate"]
-            assigned_runway = response["assigned_runway"]
-
-            print(f"[Agent] {flight_id} → {assigned_gate}/{assigned_runway}")
-            log_event(
-                "agent_response",
-                flight_id,
-                action=f"{assigned_gate}/{assigned_runway}"
-            )
-
-        except Exception as e:
-            print(f"[LLM Error] {flight_id}: {e}")
-            log_event("error", flight_id, action=str(e))
-            return
-
-    # Validate allocation
-    if gate_status[assigned_gate] != "available" or runway_status[assigned_runway] != "available":
-        log_event(
-            "invalid_assignment",
-            flight_id,
-            action=f"{assigned_gate}/{assigned_runway} unavailable"
-        )
-        print(f"[Invalid Assignment] {flight_id}")
-        return
-
-    # Allocate
-    gate_status[assigned_gate] = "occupied"
-    runway_status[assigned_runway] = "occupied"
-
+    # 3. Save to DB
     save_flight(Flight(
-        flight_id=flight_id,
-        status="arrived",
-        arrival_time=env.now,
-        assigned_gate=assigned_gate,
-        assigned_runway=assigned_runway,
-        delay=0,
-        position=(random.randint(0, 10), random.randint(0, 10))
+        flight_id=flight_id, status="parked", arrival_time=env.now,
+        assigned_gate=my_gate, assigned_runway=my_runway, delay=0, position=(0,0)
     ))
-
-    save_gate(Gate(
-        gate_id=assigned_gate,
-        occupied_by=flight_id,
-        status="occupied"
-    ))
-
-    save_runway(Runway(
-        runway_id=assigned_runway,
-        occupied_by=flight_id,
-        status="occupied"
-    ))
-
-    log_event(
-        "resource_allocated",
-        flight_id,
-        action=f"{assigned_gate}/{assigned_runway}"
-    )
-
+    
+    log_event("parked", flight_id, action=f"Parked at {my_gate}")
+    
+    # 4. Turnaround Service
     yield env.timeout(20)
 
-    # Release
-    gate_status[assigned_gate] = "available"
-    runway_status[assigned_runway] = "available"
+    # 5. Release Resources
+    gate_status[my_gate] = "available"
+    runway_status[my_runway] = "available"
+    update_gate_status(my_gate, "available")
+    update_runway_status(my_runway, "available")
+    
+    print(f"[SimPy Time: {env.now}] {flight_id} departed.")
 
-    update_gate_status(assigned_gate, "available")
-    update_runway_status(assigned_runway, "available")
 
-    log_event(
-        "resource_released",
-        flight_id,
-        action=f"{assigned_gate}/{assigned_runway}"
-    )
-
-    print(f"[SimPy Time: {env.now}] Flight {flight_id} released resources")
-
+# --- 2. THE PLANNING PHASE (Agent + OR-Tools) ---
 def run_simulation():
     env = simpy.Environment()
-    api_resource = simpy.Resource(env, capacity=1)
-    agent = build_flight_agent()
+    scheduler = build_scheduler_agent()
 
-    print("=== Starting Simulation ===")
+    print("=== Phase 1: Planning (Agent + Solver) ===")
+    
+    # Generate Dummy Flight Data
+    flight_manifest = [{"id": f"F{i+1}", "type": "A320"} for i in range(NUM_FLIGHTS)]
+    
+    prompt = (
+        f"I have {len(flight_manifest)} flights incoming.\n"
+        f"Flights: {json.dumps(flight_manifest)}\n"
+        f"Runways: {RUNWAYS}\n"
+        f"Gates: {GATES}\n"
+        "Generate a conflict-free schedule using the scheduler tool."
+    )
 
-    for i in range(NUM_FLIGHTS):
-        env.process(
-            flight_lifecycle(env, f"F{i+1}", agent, api_resource)
-        )
+    # ONE single API call for all flights (Fast & Cheap)
+    try:
+        # Pass the prompt string directly to the 'input' key
+        result = scheduler.invoke({"input": prompt})
+        # Parse the tool output from the agent's final response
+        # Note: Depending on Agent verbose output, you might need to parse `result['output']`
+        # Assuming the agent returns the JSON schedule in the text:
+        schedule_json = safe_parse_json(result['output']) 
+        print("=== Schedule Generated Successfully ===")
+    except Exception as e:
+        print(f"Planning Failed: {e}")
+        return
+
+    print("=== Phase 2: Execution (SimPy) ===")
+    
+    # Spawn SimPy processes based on the Master Schedule
+    for f_id, assignment in schedule_json.items():
+        env.process(flight_lifecycle(env, f_id, assignment))
 
     env.run(until=500)
     print("=== Simulation Complete ===")
