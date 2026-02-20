@@ -5,7 +5,7 @@ import json
 from langchain_core.messages import HumanMessage
 
 # Import the NEW scheduler agent
-from app.agents.scheduler_agent import build_scheduler_agent
+from backend.app.agents.explanation_agent import build_scheduler_agent
 from app.simulation.state import GATES, RUNWAYS, gate_status, runway_status
 from app.db.queries import log_event, save_flight, save_gate, save_runway, update_gate_status, update_runway_status
 from app.db.models.flight import Flight

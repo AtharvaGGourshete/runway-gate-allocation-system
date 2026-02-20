@@ -1,5 +1,11 @@
 from langchain.tools import tool
 from app.simulation.state import gate_status, runway_status
+from app.services.analytics_service import (
+    get_runway_utilization,
+    get_gate_utilization,
+    get_flight_delay,
+)
+from app.services.scheduler_service import simulation_time
 
 @tool
 def check_gate_availability(flight_id: str) -> str:
@@ -32,3 +38,20 @@ def resolve_conflict(flight_id: str) -> str:
     """
     print(f"[Tool] Conflict detected for {flight_id}")
     return "WAIT"
+
+@tool
+def runway_utilization():
+    """Returns runway usage statistics."""
+    return get_runway_utilization(simulation_time)
+
+
+@tool
+def gate_utilization():
+    """Returns gate usage statistics."""
+    return get_gate_utilization(simulation_time)
+
+
+@tool
+def flight_delay(flight_id: str):
+    """Returns delay information for a specific flight ID."""
+    return get_flight_delay(flight_id)
