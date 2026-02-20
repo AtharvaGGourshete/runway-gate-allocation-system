@@ -84,7 +84,7 @@ def scheduler_loop():
 
             db = get_db()
 
-            # cap active flights
+            # cap active flights at a time to 50 for simulation purposes
             active_count = db["flight"].count_documents(
                 {"status": {"$ne": "departed"}}
             )

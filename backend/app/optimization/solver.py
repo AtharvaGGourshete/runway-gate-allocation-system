@@ -16,16 +16,12 @@ def solve_airport_schedule(
     horizon_end = current_time + planning_horizon
     freeze_end = current_time + freeze_window
 
-    # Zurich runway names (index based)
+    # Zurich runway names
     RUNWAY_MAP = {
         0: "16/34",
         1: "10/28",
         2: "14/32",
     }
-
-    # ----------------------------
-    # Collections
-    # ----------------------------
 
     gate_intervals_per_gate = [[] for _ in range(G)]
     runway_intervals_per_runway = [[] for _ in range(R)]
@@ -33,10 +29,7 @@ def solve_airport_schedule(
     total_delay = []
     results = {}
 
-    # -------------------------------------------------
-    # 1️⃣ Add frozen flights (already committed)
-    # -------------------------------------------------
-
+    # Add frozen flights
     for frozen in committed_schedule:
         if frozen["landing_time"] < freeze_end:
 
@@ -79,10 +72,7 @@ def solve_airport_schedule(
                 takeoff_interval
             )
 
-    # -------------------------------------------------
-    # 2️⃣ Add flights inside planning horizon
-    # -------------------------------------------------
-
+    # Add flights inside planning horizon
     for i, p in enumerate(flights):
 
         if not (current_time <= p["scheduled_arrival"] <= horizon_end):
@@ -93,8 +83,7 @@ def solve_airport_schedule(
         arrival_lb = max(p["scheduled_arrival"], current_time)
         arrival_ub = p["scheduled_arrival"] + p["max_delay"]
 
-        # ---------------- LANDING ----------------
-
+        # Landing
         land_start = model.NewIntVar(arrival_lb, arrival_ub, f"land_{i}")
         land_end = model.NewIntVar(0, horizon_end, f"land_end_{i}")
         model.Add(land_end == land_start + p["landing_duration"])
@@ -103,10 +92,8 @@ def solve_airport_schedule(
         model.Add(delay == land_start - p["scheduled_arrival"])
         total_delay.append(delay)
 
-        # Runway assignment variable
         runway_var = model.NewIntVar(0, R - 1, f"runway_{i}")
 
-        # Create optional intervals per runway
         for r in range(R):
 
             is_on_runway = model.NewBoolVar(f"is_f{i}_r{r}")
@@ -124,8 +111,7 @@ def solve_airport_schedule(
 
             runway_intervals_per_runway[r].append(landing_optional)
 
-        # ---------------- GATE ----------------
-
+        # Gate
         gate_start = land_end
 
         gate_duration = model.NewIntVar(
@@ -156,13 +142,11 @@ def solve_airport_schedule(
 
             gate_intervals_per_gate[g].append(optional_interval)
 
-        # ---------------- TAKEOFF ----------------
-
+        # Takeoff
         takeoff_start = gate_end
         takeoff_end = model.NewIntVar(0, horizon_end, f"takeoff_end_{i}")
         model.Add(takeoff_end == takeoff_start + p["takeoff_duration"])
 
-        # Takeoff also uses same runway
         for r in range(R):
 
             is_on_runway = model.NewBoolVar(f"is_takeoff_f{i}_r{r}")
@@ -190,30 +174,18 @@ def solve_airport_schedule(
             "runway_var": runway_var,
         }
 
-    # -------------------------------------------------
-    # 3️⃣ Runway NoOverlap per runway
-    # -------------------------------------------------
+    # NoOverlap per runway
 
     for r in range(R):
         model.AddNoOverlap(runway_intervals_per_runway[r])
-
-    # -------------------------------------------------
-    # 4️⃣ Gate NoOverlap
-    # -------------------------------------------------
+    # NoOverlap per gate
 
     for g in range(G):
         model.AddNoOverlap(gate_intervals_per_gate[g])
 
-    # -------------------------------------------------
-    # 5️⃣ Objective
-    # -------------------------------------------------
-
     model.Minimize(sum(total_delay))
 
-    # -------------------------------------------------
-    # 6️⃣ Deterministic Solver
-    # -------------------------------------------------
-
+    # Deterministic Solver using fixed random seed and single thread using CP-SAT parameters
     solver = cp_model.CpSolver()
     solver.parameters.num_search_workers = 1
     solver.parameters.random_seed = 42

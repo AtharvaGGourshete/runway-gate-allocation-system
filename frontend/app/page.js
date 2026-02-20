@@ -20,13 +20,13 @@ import Link from "next/link";
 
 const poppins = Poppins({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"], // Add the weights you need
+  weight: ["400", "500", "600", "700"],
   variable: "--font-poppins",
 });
 
 const montserrat = Montserrat({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"], // Add the weights you need
+  weight: ["400", "500", "600", "700"], 
   variable: "--font-poppins",
 });
 

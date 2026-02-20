@@ -27,7 +27,7 @@ useEffect(() => {
     try {
       const res = await fetch(
         "http://localhost:5000/api/latest-schedule",
-        { cache: "no-store" }  // VERY IMPORTANT
+        { cache: "no-store" }
       );
 
       const data = await res.json();
