@@ -10,8 +10,11 @@ from app.db.queries import (
 )
 from time import time
 import app.services.scheduler_service as scheduler_service
+from flask import request
+from app.agents.explanation_agent import build_explanation_agent
 
 dash = Blueprint("health_api", __name__)
+agent = build_explanation_agent()
 
 @dash.route("/health", methods=["GET"])
 def health_check():
@@ -96,3 +99,14 @@ def get_latest_schedule():
         "schedule": schedule,
         "simulation_time": scheduler_service.simulation_time
     }
+
+@dash.route("/ai-query", methods=["POST"])
+def ai_query():
+    data = request.get_json()
+    query = data.get("query")
+
+    try:
+        response = agent.invoke({"messages": [{"role": "user", "content": query}]})
+        return {"response": response["messages"][-1].content}
+    except Exception as e:
+        return {"error": str(e)}, 500
