@@ -10,7 +10,7 @@ const formatTime = (minutes) => {
     .padStart(2, "0")}`;
 };
 
-export default function ScheduleTable({ schedule }) {
+export default function ScheduleTable({ schedule, onFlightClick }) {
   if (!schedule || schedule.length === 0) {
     return (
       <div className="text-center py-10 text-gray-500">
@@ -18,6 +18,12 @@ export default function ScheduleTable({ schedule }) {
       </div>
     );
   }
+
+  const handleRowClick = (flightId) => {
+    if (onFlightClick) {
+      onFlightClick(flightId);
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
@@ -42,7 +48,8 @@ export default function ScheduleTable({ schedule }) {
             {schedule.map((flight, index) => (
               <tr
                 key={index}
-                className="border-b hover:bg-gray-50 transition duration-200"
+                className="border-b hover:bg-gray-50 transition duration-200 cursor-pointer"
+                onClick={() => handleRowClick(flight.flight_id)}
               >
                 <td className="px-6 py-4 font-semibold text-gray-800">
                   {flight.flight_id}
@@ -77,3 +84,4 @@ export default function ScheduleTable({ schedule }) {
     </div>
   );
 }
+

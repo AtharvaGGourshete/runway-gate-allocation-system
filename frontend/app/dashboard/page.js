@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import ScheduleTable from "@/components/ScheduleTable";
-import GanttTimeline from "@/components/GanttTimeline";
 import dynamic from "next/dynamic";
+import KpiBar from "@/components/KpiBar";
+import UtilizationChart from "@/components/UtilizationChart";
+import FlightDetailsDrawer from "@/components/FlightDetailsDrawer";
+import AiInsightsPanel from "@/components/AiInsightsPanel";
+import SurfaceMovementPanel from "@/components/SurfaceMovementPanel";
+import ResourceDispatchPanel from "@/components/ResourceDispatchPanel";
 
 const AirportLayout = dynamic(
   () => import("@/components/AirportLayout"),
@@ -15,81 +20,189 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [simulationTime, setSimulationTime] = useState(0);
+  const [insights, setInsights] = useState(null);
 
-  function formatTime(minutes) {
-  const h = Math.floor(minutes / 60) % 24;
-  const m = minutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
+  const [selectedFlightId, setSelectedFlightId] = useState(null);
+  const [flightDetails, setFlightDetails] = useState(null);
+  const [flightDetailsLoading, setFlightDetailsLoading] = useState(false);
+  const [flightDetailsError, setFlightDetailsError] = useState(null);
 
-useEffect(() => {
-  const fetchSchedule = async () => {
+  useEffect(() => {
+    const fetchSchedule = async () => {
+      try {
+        const res = await fetch(
+          "http://localhost:5000/api/latest-schedule",
+          { cache: "no-store" }
+        );
+
+        const data = await res.json();
+
+        if (data.status === "success") {
+          setSchedule(data.schedule);
+          setSimulationTime(data.simulation_time);
+        }
+      } catch (err) {
+        console.error("Fetch error:", err);
+        setError("Unable to load latest schedule.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSchedule(); // first load
+
+    const interval = setInterval(fetchSchedule, 1000); // every 1 second
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const fetchInsights = async () => {
+      try {
+        const res = await fetch(
+          "http://localhost:5000/api/dashboard-insights?window=120",
+          { cache: "no-store" }
+        );
+
+        const data = await res.json();
+
+        if (data.status === "success") {
+          setInsights(data);
+        }
+      } catch (err) {
+        console.error("Insights fetch error:", err);
+      }
+    };
+
+    fetchInsights();
+    const interval = setInterval(fetchInsights, 5000); // every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleFlightClick = async (flightId) => {
+    setSelectedFlightId(flightId);
+    setFlightDetails(null);
+    setFlightDetailsError(null);
+    setFlightDetailsLoading(true);
+
     try {
       const res = await fetch(
-        "http://localhost:5000/api/latest-schedule",
+        `http://localhost:5000/api/flight/${encodeURIComponent(
+          flightId
+        )}/details`,
         { cache: "no-store" }
       );
 
       const data = await res.json();
 
       if (data.status === "success") {
-        setSchedule(data.schedule);
-        setSimulationTime(data.simulation_time);
+        setFlightDetails(data.details);
+      } else {
+        setFlightDetailsError(data.message || "Unable to load flight details.");
       }
     } catch (err) {
-      console.error("Fetch error:", err);
+      console.error("Flight details fetch error:", err);
+      setFlightDetailsError("Unable to load flight details.");
     } finally {
-      setLoading(false);
+      setFlightDetailsLoading(false);
     }
   };
 
-  fetchSchedule(); // first load
-
-  const interval = setInterval(fetchSchedule, 1000); // every 1 second
-
-  return () => clearInterval(interval);
-
-}, []);
-
-
+  const handleCloseDrawer = () => {
+    setSelectedFlightId(null);
+    setFlightDetails(null);
+    setFlightDetailsError(null);
+    setFlightDetailsLoading(false);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-[#141414] text-[#f7c576] px-6 py-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-8">
-          Airport Operations Dashboard
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Airport Operations Dashboard
+            </h1>
+            <p className="text-sm text-[#f7c576]/70 mt-1">
+              Live schedule, surface movement, resources, and AI insights for LSZH.
+            </p>
+          </div>
+          <div className="hidden md:flex items-center gap-3 text-xs">
+            <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="uppercase tracking-widest font-semibold text-[#f7c576]/70">
+              Simulation Live
+            </span>
+          </div>
+        </div>
 
         {loading && (
           <div className="flex justify-center items-center py-20">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-12 h-12 border-4 border-[#f7c576] border-t-transparent rounded-full animate-spin"></div>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-100 text-red-700 p-4 rounded-xl">
+          <div className="bg-red-900/40 text-red-200 border border-red-500/60 p-4 rounded-2xl">
             {error}
           </div>
         )}
 
-        <div className="text-lg font-semibold mb-4">
-          Simulation Time: {formatTime(simulationTime)}
-        </div>
+        {insights && (
+          <KpiBar
+            simulationTime={simulationTime}
+            kpis={insights.kpis}
+          />
+        )}
 
         {!loading && !error && (
-          <>
-            <ScheduleTable schedule={schedule} />
-            <AirportLayout
-                schedule={schedule}
-                currentTime={simulationTime}
-              />
-            {/* <GanttTimeline
-                schedule={schedule}
-                currentTime={0}
-              /> */}
-          </>
+          <div className="space-y-8">
+            {insights && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <UtilizationChart
+                  title="Runway Utilization (recent window)"
+                  data={insights.runway_utilization}
+                />
+                <UtilizationChart
+                  title="Gate Utilization (recent window)"
+                  data={insights.gate_utilization}
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="space-y-6 lg:col-span-2">
+                <ScheduleTable
+                  schedule={schedule}
+                  onFlightClick={handleFlightClick}
+                />
+                {/* <GanttTimeline
+                  schedule={schedule}
+                  currentTime={simulationTime}
+                /> */}
+              </div>
+
+              <div className="lg:col-span-1 space-y-6">
+                <AirportLayout
+                  schedule={schedule}
+                  currentTime={simulationTime}
+                />
+                <AiInsightsPanel />
+                <SurfaceMovementPanel />
+                <ResourceDispatchPanel />
+              </div>
+            </div>
+          </div>
         )}
       </div>
+
+      <FlightDetailsDrawer
+        isOpen={!!selectedFlightId}
+        onClose={handleCloseDrawer}
+        details={flightDetails}
+        loading={flightDetailsLoading}
+        error={flightDetailsError}
+      />
     </div>
   );
 }

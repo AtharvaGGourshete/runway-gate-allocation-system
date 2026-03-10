@@ -11,6 +11,7 @@ from app.db.queries import (
 )
 from app.optimization.solver import solve_airport_schedule
 from app.db.mongo import get_db
+from app.agents.multi_agent_coordinator import coordinator as multi_agent_coordinator
 
 simulation_time = 0
 
@@ -95,6 +96,13 @@ def scheduler_loop():
             run_scheduler(current_time)
 
             cleanup_departed_flights(current_time)
+
+            # Run step-based multi-agent ops (surface + GSE dispatch).
+            # Kept lightweight so it can run every simulated minute.
+            try:
+                multi_agent_coordinator.step(current_time=current_time)
+            except Exception as e:
+                print("Multi-agent step error:", e)
 
             print("Sim Time:", simulation_time)
 
