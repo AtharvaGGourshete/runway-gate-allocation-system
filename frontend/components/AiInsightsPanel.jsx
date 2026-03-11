@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Sparkles, Send, RefreshCcw, AlertCircle, Bot, MessageSquare } from "lucide-react";
 
-export default function AiInsightsPanel() {
+export default function AiInsightsPanel({ compact = false }) {
   const [autoInsight, setAutoInsight] = useState("");
   const [autoLoading, setAutoLoading] = useState(false);
   const [autoError, setAutoError] = useState(null);
@@ -63,7 +63,11 @@ export default function AiInsightsPanel() {
   };
 
   return (
-    <div className="bg-[#1f1f1f] rounded-2xl border border-[#2a2a2a] flex flex-col h-[500px] overflow-hidden">
+    <div
+      className={`bg-[#1f1f1f] rounded-2xl border border-[#2a2a2a] flex flex-col overflow-hidden ${
+        compact ? "h-[496px]" : "h-[500px]"
+      }`}
+    >
       {/* Header */}
       <div className="p-4 border-b border-[#2a2a2a] bg-[#1b1b1b] flex justify-between items-center">
         <div className="flex items-center gap-2">
@@ -72,7 +76,7 @@ export default function AiInsightsPanel() {
           </div>
           <div>
             <h2 className="text-sm font-bold text-[#f7c576] leading-none">
-              AI Ops Copilot
+              AI Ops Insights Agent
             </h2>
             <p className="text-[10px] text-[#f7c576]/60 mt-1 uppercase tracking-wider font-semibold">
               Real-time Analysis
@@ -170,3 +174,6 @@ export default function AiInsightsPanel() {
     </div>
   );
 }
+
+
+

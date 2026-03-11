@@ -32,7 +32,7 @@ export default function FlightDetailsDrawer({
 
   return (
     <div
-      className={`fixed inset-0 z-40 ${
+      className={`fixed inset-0 z-[1200] ${
         isOpen ? "pointer-events-auto" : "pointer-events-none"
       }`}
     >
@@ -44,7 +44,7 @@ export default function FlightDetailsDrawer({
       />
 
       <div
-        className={`absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl transform transition-transform duration-300 ${
+        className={`absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl transform transition-transform duration-300 z-10 ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -211,4 +211,5 @@ export default function FlightDetailsDrawer({
     </div>
   );
 }
+
 

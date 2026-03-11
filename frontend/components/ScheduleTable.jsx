@@ -1,19 +1,42 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 
 const formatTime = (minutes) => {
-  const hrs = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hrs.toString().padStart(2, "0")}:${mins
-    .toString()
-    .padStart(2, "0")}`;
+  const safe = Number(minutes);
+  if (!Number.isFinite(safe)) return "--:--";
+  const hrs = Math.floor(safe / 60);
+  const mins = safe % 60;
+  return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
+};
+
+const runwayLabel = (flight) => {
+  const byName = String(flight?.runway || "").trim();
+  if (byName) return byName;
+
+  const idx = Number(flight?.runway_index);
+  if (idx === 0) return "16/34";
+  if (idx === 1) return "10/28";
+  if (idx === 2) return "14/32";
+  return "--";
 };
 
 export default function ScheduleTable({ schedule, onFlightClick }) {
-  if (!schedule || schedule.length === 0) {
+  const visibleRows = useMemo(() => {
+    const rows = Array.isArray(schedule) ? [...schedule] : [];
+    rows.sort((a, b) => {
+      const aArr = Number(a?.landing_time);
+      const bArr = Number(b?.landing_time);
+      const safeA = Number.isFinite(aArr) ? aArr : Number.MAX_SAFE_INTEGER;
+      const safeB = Number.isFinite(bArr) ? bArr : Number.MAX_SAFE_INTEGER;
+      return safeA - safeB;
+    });
+    return rows.slice(0, 5);
+  }, [schedule]);
+
+  if (!visibleRows || visibleRows.length === 0) {
     return (
-      <div className="text-center py-10 text-gray-500">
+      <div className="text-center py-10 text-[#f7c576]/60 bg-[#1f1f1f] rounded-2xl border border-[#2a2a2a]">
         No scheduled flights available.
       </div>
     );
@@ -26,56 +49,50 @@ export default function ScheduleTable({ schedule, onFlightClick }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-      <div className="px-6 py-4 border-b bg-gray-900 text-white">
+    <div className="bg-[#1f1f1f] rounded-2xl border border-[#2a2a2a] shadow-sm h-[560px] flex flex-col overflow-hidden">
+      <div className="px-6 py-4 border-b border-[#2a2a2a] bg-[#1b1b1b] text-[#f7c576] flex items-center justify-between">
         <h2 className="text-xl font-semibold">Optimized Flight Schedule</h2>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm text-left">
-          <thead className="bg-gray-100 text-gray-700 uppercase text-xs">
+      <div className="overflow-y-auto flex-1">
+        <table className="w-full table-fixed text-xs text-left">
+          <thead className="bg-[#232323] text-[#f7c576]/75 uppercase text-xs sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-3">Flight</th>
-              <th className="px-6 py-3">Landing</th>
-              <th className="px-6 py-3">Gate</th>
-              <th className="px-6 py-3">Gate Arrival</th>
-              <th className="px-6 py-3">Gate Departure</th>
-              <th className="px-6 py-3">Takeoff</th>
+              <th className="px-3 py-2 whitespace-nowrap">Flight</th>
+              <th className="px-3 py-2 whitespace-nowrap">Arrival</th>
+              <th className="px-3 py-2 whitespace-nowrap">Runway</th>
+              <th className="px-3 py-2 whitespace-nowrap">Gate</th>
+              <th className="px-3 py-2 whitespace-nowrap">Gate Arr</th>
+              <th className="px-3 py-2 whitespace-nowrap">Gate Dep</th>
+              <th className="px-3 py-2 whitespace-nowrap">Takeoff</th>
             </tr>
           </thead>
 
-          <tbody>
-            {schedule.map((flight, index) => (
+          <tbody className="text-[#f7c576]">
+            {visibleRows.map((flight, index) => (
               <tr
-                key={index}
-                className="border-b hover:bg-gray-50 transition duration-200 cursor-pointer"
+                key={`${flight.flight_id}-${index}`}
+                className="border-b border-[#2a2a2a] hover:bg-[#242424] transition duration-200 cursor-pointer"
                 onClick={() => handleRowClick(flight.flight_id)}
               >
-                <td className="px-6 py-4 font-semibold text-gray-800">
-                  {flight.flight_id}
+                <td className="px-3 py-3 font-semibold truncate">{flight.flight_id}</td>
+                <td className="px-3 py-3 text-[#f7c576]/85 whitespace-nowrap">{formatTime(flight.landing_time)}</td>
+
+                <td className="px-3 py-3">
+                  <span className="px-2 py-0.5 text-[11px] font-medium bg-[#3a272a] text-[#ff9ea6] rounded-full border border-[#5a363d] whitespace-nowrap">
+                    {runwayLabel(flight)}
+                  </span>
                 </td>
 
-                <td className="px-6 py-4">
-                  {formatTime(flight.landing_time)}
-                </td>
-
-                <td className="px-6 py-4">
-                  <span className="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                <td className="px-3 py-3">
+                  <span className="px-2 py-0.5 text-[11px] font-medium bg-[#263244] text-[#9bc3ff] rounded-full border border-[#334661] whitespace-nowrap">
                     {flight.gate}
                   </span>
                 </td>
 
-                <td className="px-6 py-4">
-                  {formatTime(flight.gate_arrival)}
-                </td>
-
-                <td className="px-6 py-4">
-                  {formatTime(flight.gate_departure)}
-                </td>
-
-                <td className="px-6 py-4">
-                  {formatTime(flight.takeoff_time)}
-                </td>
+                <td className="px-3 py-3 text-[#f7c576]/85 whitespace-nowrap">{formatTime(flight.gate_arrival)}</td>
+                <td className="px-3 py-3 text-[#f7c576]/85 whitespace-nowrap">{formatTime(flight.gate_departure)}</td>
+                <td className="px-3 py-3 text-[#f7c576]/85 whitespace-nowrap">{formatTime(flight.takeoff_time)}</td>
               </tr>
             ))}
           </tbody>
@@ -84,4 +101,5 @@ export default function ScheduleTable({ schedule, onFlightClick }) {
     </div>
   );
 }
+
 

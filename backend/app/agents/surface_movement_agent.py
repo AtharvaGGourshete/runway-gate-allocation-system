@@ -36,15 +36,25 @@ def _gate_node(gate_value: Any) -> str:
 
 
 def _runway_node(runway_value: Any, runway_index: Any = None) -> str:
-    # Prefer the concrete runway string produced by the solver.
-    if isinstance(runway_value, str) and runway_value.strip():
-        return runway_value.strip()
+    valid_runways = {"16/34", "10/28", "14/32"}
+
+    # Prefer runway from schedule if valid.
+    if isinstance(runway_value, str):
+        runway_str = runway_value.strip()
+        if runway_str in valid_runways:
+            return runway_str
+
     # Fallback to index mapping consistent with optimization/solver.py
     try:
         idx = int(runway_index)
     except Exception:
         idx = 0
-    return "16/34" if idx == 0 else "10/28"
+
+    if idx == 0:
+        return "16/34"
+    if idx == 1:
+        return "10/28"
+    return "14/32"
 
 
 @dataclass
@@ -173,9 +183,9 @@ class SurfaceMovementAgent:
             # Avoid replanning if we already have an active plan of same mode.
             existing_doc = db["surface_state"].find_one(
                 {"flight_id": fid, "mode": mode, "end_time": {"$gte": current_time}},
-                {"_id": 1},
+                {"_id": 1, "end_node": 1},
             )
-            if existing_doc:
+            if existing_doc and existing_doc.get("end_node") == end_node:
                 continue
 
             base_path = self.graph.shortest_path(start_node, end_node)
@@ -261,4 +271,10 @@ class SurfaceMovementAgent:
             "planned_count": len(planned),
             "upserts": upserts,
         }
+
+
+
+
+
+
 

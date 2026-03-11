@@ -1,22 +1,27 @@
-from datetime import datetime
+﻿from datetime import datetime
+
+from app.db.models.event import Event
 from app.db.models.flight import Flight
 from app.db.models.gate import Gate
-from app.db.models.runway import Runway
-from app.db.models.event import Event
 from app.db.models.metrics import Metrics
-from app.db.mongo import get_db 
+from app.db.models.runway import Runway
+from app.db.mongo import get_db
+
 
 def save_flight(flight: Flight):
     db = get_db()
     db["flight"].insert_one(flight.dict())
-    
+
+
 def save_gate(gate: Gate):
     db = get_db()
     db["gate"].insert_one(gate.dict())
 
+
 def save_runway(runway: Runway):
     db = get_db()
     db["runway"].insert_one(runway.dict())
+
 
 def log_event(event_type, flight_id=None, resource=None, action=""):
     db = get_db()
@@ -28,47 +33,57 @@ def log_event(event_type, flight_id=None, resource=None, action=""):
         action=action,
     )
     db["event"].insert_one(event.dict())
-    
+
+
 def save_metrics(metrics: Metrics):
     db = get_db()
     db["metrics"].insert_one(metrics.dict())
-    
+
+
 def update_gate_status(gate_id: str, status: str):
     db = get_db()
     db["gate"].update_one(
         {"gate_id": gate_id},
-        {"$set": {"status": status, "occupied_by": None}}
+        {"$set": {"status": status, "occupied_by": None}},
     )
+
 
 def update_runway_status(runway_id: str, status: str):
     db = get_db()
     db["runway"].update_one(
         {"runway_id": runway_id},
-        {"$set": {"status": status, "occupied_by": None}}
+        {"$set": {"status": status, "occupied_by": None}},
     )
+
 
 def get_all_flights():
     db = get_db()
     flights = list(db["flight"].find({}, {"_id": 0}))
     return flights
 
+
 def get_active_flights():
     db = get_db()
     return list(
         db["flight"].find(
             {"status": {"$in": ["arriving", "landing", "taxiing"]}},
-            {"_id": 0}
+            {"_id": 0},
         )
     )
+
+
 def save_schedule_version(version, current_time, freeze_window, planning_horizon):
     db = get_db()
-    db["schedule_meta"].insert_one({
-        "version": version,
-        "run_time": datetime.utcnow().timestamp(),
-        "current_time": current_time,
-        "freeze_window": freeze_window,
-        "planning_horizon": planning_horizon
-    })
+    db["schedule_meta"].insert_one(
+        {
+            "version": version,
+            "run_time": datetime.utcnow().timestamp(),
+            "current_time": current_time,
+            "freeze_window": freeze_window,
+            "planning_horizon": planning_horizon,
+        }
+    )
+
 
 def save_schedule_assignments(schedule, version, freeze_end):
     db = get_db()
@@ -77,31 +92,55 @@ def save_schedule_assignments(schedule, version, freeze_end):
     db["schedule"].delete_many({"frozen": False})
 
     for s in schedule:
-
         is_frozen = s["landing_time"] < freeze_end
+
+        # Keep gate/runway immutable once first assigned for a flight.
+        existing = db["schedule"].find_one(
+            {"flight_id": s["flight_id"]},
+            {"_id": 0, "gate": 1, "gate_index": 1, "runway": 1, "runway_index": 1},
+        )
+
+        gate_value = s.get("gate")
+        gate_index_value = s.get("gate_index")
+        runway_value = s.get("runway")
+        runway_index_value = s.get("runway_index")
+
+        if existing:
+            existing_gate = existing.get("gate")
+            if existing_gate not in (None, ""):
+                gate_value = existing_gate
+
+            if existing.get("gate_index") is not None:
+                gate_index_value = existing.get("gate_index")
+
+            existing_runway = existing.get("runway")
+            if existing_runway not in (None, ""):
+                runway_value = existing_runway
+
+            if existing.get("runway_index") is not None:
+                runway_index_value = existing.get("runway_index")
 
         db["schedule"].update_one(
             {"flight_id": s["flight_id"]},
             {
                 "$set": {
                     "landing_time": s["landing_time"],
-                    "gate": s["gate"],
+                    "gate": gate_value,
+                    "gate_index": gate_index_value,
                     "gate_arrival": s["gate_arrival"],
                     "gate_departure": s["gate_departure"],
                     "takeoff_time": s["takeoff_time"],
+                    "runway": runway_value,
+                    "runway_index": runway_index_value,
                     "frozen": is_frozen,
                     "schedule_version": version,
-                    "created_at": datetime.utcnow().timestamp()
+                    "created_at": datetime.utcnow().timestamp(),
                 }
             },
-            upsert=True
+            upsert=True,
         )
+
 
 def get_committed_schedule():
     db = get_db()
-    return list(
-        db["schedule"].find(
-            {"frozen": True},
-            {"_id": 0}
-        )
-    )
+    return list(db["schedule"].find({"frozen": True}, {"_id": 0}))

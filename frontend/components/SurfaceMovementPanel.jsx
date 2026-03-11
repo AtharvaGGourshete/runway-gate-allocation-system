@@ -37,7 +37,7 @@ export default function SurfaceMovementPanel() {
   const rows = (data?.surface_state || []).slice(0, 8);
 
   return (
-    <div className="bg-[#1f1f1f] rounded-2xl shadow-sm border border-[#2a2a2a] p-4">
+    <div className="bg-[#1f1f1f] rounded-2xl shadow-sm border border-[#2a2a2a] p-4 h-[360px] flex flex-col">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-[#f7c576]">
           Surface Movement
@@ -54,7 +54,7 @@ export default function SurfaceMovementPanel() {
       {error && <div className="text-xs text-red-300">{error}</div>}
 
       {!error && (
-        <div className="space-y-2">
+        <div className="space-y-2 flex-1 overflow-y-auto pr-1">
           <div className="text-[11px] text-[#f7c576]/60">
             Sim time: {data?.simulation_time ?? "—"}
           </div>
@@ -106,4 +106,6 @@ export default function SurfaceMovementPanel() {
     </div>
   );
 }
+
+
 

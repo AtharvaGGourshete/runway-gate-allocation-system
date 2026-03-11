@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import math
 from dataclasses import dataclass
@@ -34,17 +34,18 @@ class AirportGraph:
         # Runways (keep simple abstract positions)
         self.nodes["16/34"] = Node("16/34", (0.0, 0.0))
         self.nodes["10/28"] = Node("10/28", (40.0, 0.0))
+        self.nodes["14/32"] = Node("14/32", (20.0, -6.0))
 
         # Surface junctions / apron / depot (abstract layout)
         self.nodes["APRON"] = Node("APRON", (20.0, 20.0))
         self.nodes["DEPOT"] = Node("DEPOT", (10.0, 25.0))
         self.nodes["EXIT_16"] = Node("EXIT_16", (5.0, 10.0))
         self.nodes["EXIT_10"] = Node("EXIT_10", (35.0, 10.0))
+        self.nodes["EXIT_14"] = Node("EXIT_14", (20.0, 8.0))
 
         # Gates: project real gates from GeoJSON into a simple line near the apron.
         gates = load_gates()
         if not gates:
-            # Fallback: small synthetic set if GeoJSON is missing
             gate_ids = ["G1", "G2", "G3"]
         else:
             gate_ids = [g.gate_id for g in gates]
@@ -58,8 +59,10 @@ class AirportGraph:
         self.adj: Dict[str, List[str]] = {nid: [] for nid in self.nodes}
         self._connect("16/34", "EXIT_16")
         self._connect("10/28", "EXIT_10")
+        self._connect("14/32", "EXIT_14")
         self._connect("EXIT_16", "APRON")
         self._connect("EXIT_10", "APRON")
+        self._connect("EXIT_14", "APRON")
         self._connect("DEPOT", "APRON")
         for gid in gate_ids:
             self._connect("APRON", gid)
@@ -80,15 +83,10 @@ class AirportGraph:
         return math.hypot(ax - bx, ay - by)
 
     def edge_travel_time(self, a: str, b: str) -> int:
-        # At least 1 minute per edge to keep discrete simulation stable.
         dist = self.distance(a, b)
         return max(1, int(math.ceil(dist / self.taxi_speed_units_per_min)))
 
     def shortest_path(self, start: str, goal: str) -> List[str]:
-        """
-        Deterministic A* on the taxiway graph.
-        Returns list of node IDs including start and goal.
-        """
         if start == goal:
             return [start]
         if start not in self.nodes or goal not in self.nodes:
@@ -145,4 +143,3 @@ class AirportGraph:
         for a, b in zip(path, path[1:]):
             total += self.edge_travel_time(a, b)
         return total
-

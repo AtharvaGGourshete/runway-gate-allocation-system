@@ -4,16 +4,14 @@ import { useEffect, useState } from "react";
 import ScheduleTable from "@/components/ScheduleTable";
 import dynamic from "next/dynamic";
 import KpiBar from "@/components/KpiBar";
-import UtilizationChart from "@/components/UtilizationChart";
 import FlightDetailsDrawer from "@/components/FlightDetailsDrawer";
 import AiInsightsPanel from "@/components/AiInsightsPanel";
 import SurfaceMovementPanel from "@/components/SurfaceMovementPanel";
 import ResourceDispatchPanel from "@/components/ResourceDispatchPanel";
 
-const AirportLayout = dynamic(
-  () => import("@/components/AirportLayout"),
-  { ssr: false }
-);
+const AirportLayout = dynamic(() => import("@/components/AirportLayout"), {
+  ssr: false,
+});
 
 export default function DashboardPage() {
   const [schedule, setSchedule] = useState([]);
@@ -30,10 +28,9 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchSchedule = async () => {
       try {
-        const res = await fetch(
-          "http://localhost:5000/api/latest-schedule",
-          { cache: "no-store" }
-        );
+        const res = await fetch("http://localhost:5000/api/latest-schedule", {
+          cache: "no-store",
+        });
 
         const data = await res.json();
 
@@ -49,9 +46,8 @@ export default function DashboardPage() {
       }
     };
 
-    fetchSchedule(); // first load
-
-    const interval = setInterval(fetchSchedule, 1000); // every 1 second
+    fetchSchedule();
+    const interval = setInterval(fetchSchedule, 1000);
 
     return () => clearInterval(interval);
   }, []);
@@ -59,10 +55,9 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchInsights = async () => {
       try {
-        const res = await fetch(
-          "http://localhost:5000/api/dashboard-insights?window=120",
-          { cache: "no-store" }
-        );
+        const res = await fetch("http://localhost:5000/api/dashboard-insights?window=120", {
+          cache: "no-store",
+        });
 
         const data = await res.json();
 
@@ -75,7 +70,7 @@ export default function DashboardPage() {
     };
 
     fetchInsights();
-    const interval = setInterval(fetchInsights, 5000); // every 5 seconds
+    const interval = setInterval(fetchInsights, 5000);
 
     return () => clearInterval(interval);
   }, []);
@@ -88,9 +83,7 @@ export default function DashboardPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:5000/api/flight/${encodeURIComponent(
-          flightId
-        )}/details`,
+        `http://localhost:5000/api/flight/${encodeURIComponent(flightId)}/details`,
         { cache: "no-store" }
       );
 
@@ -117,13 +110,11 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#141414] text-[#f7c576] px-6 py-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#141414] text-[#f7c576] px-2 md:px-3 lg:px-4 py-8">
+      <div className="max-w-[1820px] mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Airport Operations Dashboard
-            </h1>
+            <h1 className="text-3xl font-bold tracking-tight">Airport Operations Dashboard</h1>
             <p className="text-sm text-[#f7c576]/70 mt-1">
               Live schedule, surface movement, resources, and AI insights for LSZH.
             </p>
@@ -148,48 +139,27 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {insights && (
-          <KpiBar
-            simulationTime={simulationTime}
-            kpis={insights.kpis}
-          />
-        )}
-
         {!loading && !error && (
-          <div className="space-y-8">
-            {insights && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <UtilizationChart
-                  title="Runway Utilization (recent window)"
-                  data={insights.runway_utilization}
-                />
-                <UtilizationChart
-                  title="Gate Utilization (recent window)"
-                  data={insights.gate_utilization}
-                />
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+              <div className="lg:col-span-3 space-y-4">
+                {insights && <KpiBar simulationTime={simulationTime} kpis={insights.kpis} />}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <SurfaceMovementPanel />
+                  <ResourceDispatchPanel />
+                </div>
               </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="space-y-6 lg:col-span-2">
-                <ScheduleTable
-                  schedule={schedule}
-                  onFlightClick={handleFlightClick}
-                />
-                {/* <GanttTimeline
-                  schedule={schedule}
-                  currentTime={simulationTime}
-                /> */}
+              <div className="lg:col-span-1">
+                <AiInsightsPanel compact />
               </div>
+            </div>
 
-              <div className="lg:col-span-1 space-y-6">
-                <AirportLayout
-                  schedule={schedule}
-                  currentTime={simulationTime}
-                />
-                <AiInsightsPanel />
-                <SurfaceMovementPanel />
-                <ResourceDispatchPanel />
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              <div className="lg:col-span-2">
+                <ScheduleTable schedule={schedule} onFlightClick={handleFlightClick} />
+              </div>
+              <div className="lg:col-span-3">
+                <AirportLayout schedule={schedule} currentTime={simulationTime} />
               </div>
             </div>
           </div>
@@ -206,3 +176,8 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+
+
+
+
