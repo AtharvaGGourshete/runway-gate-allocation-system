@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from "react";
 
+const formatTime = (minutes) => {
+  const safe = Number(minutes);
+  if (!Number.isFinite(safe) || safe < 0) return "--:--";
+  const hrs = Math.floor(safe / 60);
+  const mins = safe % 60;
+  return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+};
+
 export default function SurfaceMovementPanel() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -39,15 +47,13 @@ export default function SurfaceMovementPanel() {
   return (
     <div className="bg-[#1f1f1f] rounded-2xl shadow-sm border border-[#2a2a2a] p-4 h-[360px] flex flex-col">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-[#f7c576]">
-          Surface Movement
-        </h3>
+        <h3 className="text-sm font-semibold text-[#f7c576]">Surface Movement</h3>
         <button
           onClick={fetchSurface}
-          className="text-xs font-semibold text-[#f7c576] hover:text-[#ffd28a]"
+          className="w-20 shrink-0 text-center whitespace-nowrap text-xs font-semibold text-[#f7c576] hover:text-[#ffd28a]"
           disabled={loading}
         >
-          {loading ? "Refreshing…" : "Refresh"}
+          {loading ? "Updating" : "Refresh"}
         </button>
       </div>
 
@@ -55,9 +61,7 @@ export default function SurfaceMovementPanel() {
 
       {!error && (
         <div className="space-y-2 flex-1 overflow-y-auto pr-1">
-          <div className="text-[11px] text-[#f7c576]/60">
-            Sim time: {data?.simulation_time ?? "—"}
-          </div>
+          <div className="text-[11px] text-[#f7c576]/60">Sim time: {formatTime(data?.simulation_time)}</div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -67,7 +71,7 @@ export default function SurfaceMovementPanel() {
                   <th className="text-left py-1 pr-2 font-medium">From</th>
                   <th className="text-left py-1 pr-2 font-medium">To</th>
                   <th className="text-left py-1 pr-2 font-medium">Hold</th>
-                  <th className="text-left py-1 pr-2 font-medium">ETA</th>
+                  <th className="text-left py-1 pr-2 font-medium">ETA(Gate/Runway)</th>
                 </tr>
               </thead>
               <tbody className="text-[#f7c576]">
@@ -79,18 +83,13 @@ export default function SurfaceMovementPanel() {
                   </tr>
                 )}
                 {rows.map((r) => (
-                  <tr
-                    key={`${r.flight_id}-${r.mode}`}
-                    className="border-t border-[#2a2a2a]"
-                  >
+                  <tr key={`${r.flight_id}-${r.mode}`} className="border-t border-[#2a2a2a]">
                     <td className="py-1 pr-2 font-medium">{r.flight_id}</td>
-                    <td className="py-1 pr-2 text-[#f7c576]/80">
-                      {r.mode}
-                    </td>
+                    <td className="py-1 pr-2 text-[#f7c576]/80">{r.mode}</td>
                     <td className="py-1 pr-2">{r.start_node}</td>
                     <td className="py-1 pr-2">{r.end_node}</td>
                     <td className="py-1 pr-2">{r.hold_minutes ?? 0}m</td>
-                    <td className="py-1 pr-2">{r.end_time ?? "—"}</td>
+                    <td className="py-1 pr-2">{formatTime(r.end_time)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -106,6 +105,3 @@ export default function SurfaceMovementPanel() {
     </div>
   );
 }
-
-
-

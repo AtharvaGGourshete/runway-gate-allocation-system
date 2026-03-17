@@ -116,7 +116,7 @@ export default function AiInsightsPanel({ compact = false }) {
                 <p className="text-xs">{autoError}</p>
               </div>
             ) : (
-              <p className="text-sm text-[#f7c576]/80 leading-relaxed italic">
+              <p className="text-sm text-[#f7c576]/80 leading-relaxed whitespace-pre-line">
                 {autoInsight || "Analyzing current traffic patterns..."}
               </p>
             )}
@@ -131,7 +131,7 @@ export default function AiInsightsPanel({ compact = false }) {
               <span className="text-[11px] font-bold uppercase">Response</span>
             </div>
             <div className="p-4 rounded-2xl bg-slate-800 text-slate-100 shadow-inner">
-              <p className="text-sm leading-relaxed">{answer}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-line">{answer}</p>
             </div>
           </div>
         )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import ScheduleTable from "@/components/ScheduleTable";
 import dynamic from "next/dynamic";
 import KpiBar from "@/components/KpiBar";
@@ -119,7 +120,19 @@ export default function DashboardPage() {
               Live schedule, surface movement, resources, and AI insights for LSZH.
             </p>
           </div>
-          <div className="hidden md:flex items-center gap-3 text-xs">
+          <div className="hidden md:flex items-center gap-2 text-xs">
+            <Link
+              href="/flights"
+              className="px-3 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#1f1f1f] text-[#f7c576] hover:bg-[#252525] transition"
+            >
+              Flights Center
+            </Link>
+            <Link
+              href="/gse"
+              className="px-3 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#1f1f1f] text-[#f7c576] hover:bg-[#252525] transition"
+            >
+              GSE Center
+            </Link>
             <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="uppercase tracking-widest font-semibold text-[#f7c576]/70">
               Simulation Live
@@ -144,9 +157,13 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
               <div className="lg:col-span-3 space-y-4">
                 {insights && <KpiBar simulationTime={simulationTime} kpis={insights.kpis} />}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <SurfaceMovementPanel />
-                  <ResourceDispatchPanel />
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                  <div className="md:col-span-2">
+                    <SurfaceMovementPanel />
+                  </div>
+                  <div className="md:col-span-3">
+                    <ResourceDispatchPanel />
+                  </div>
                 </div>
               </div>
               <div className="lg:col-span-1">
@@ -176,6 +193,7 @@ export default function DashboardPage() {
     </div>
   );
 }
+
 
 
 

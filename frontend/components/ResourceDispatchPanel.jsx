@@ -2,6 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+const formatTime = (minutes) => {
+  const safe = Number(minutes);
+  if (!Number.isFinite(safe) || safe < 0) return "--:--";
+  const hrs = Math.floor(safe / 60);
+  const mins = safe % 60;
+  return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+};
+
 export default function ResourceDispatchPanel() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -78,9 +86,7 @@ export default function ResourceDispatchPanel() {
 
       {!error && (
         <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-          <div className="text-[11px] text-[#f7c576]/60">
-            Sim time: {data?.simulation_time ?? "--"}
-          </div>
+          <div className="text-[11px] text-[#f7c576]/60">Sim time: {formatTime(data?.simulation_time)}</div>
 
           <div className="text-[11px] text-[#f7c576]/75 grid grid-cols-2 gap-2">
             <div>
@@ -154,4 +160,3 @@ export default function ResourceDispatchPanel() {
     </div>
   );
 }
-

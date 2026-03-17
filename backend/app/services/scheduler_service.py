@@ -334,14 +334,39 @@ def cleanup_departed_flights(current_time):
     departed_flights = list(
         db["schedule"].find(
             {"takeoff_time": {"$lt": current_time}},
-            {"flight_id": 1},
+            {
+                "_id": 0,
+                "flight_id": 1,
+                "landing_time": 1,
+                "gate_arrival": 1,
+                "gate_departure": 1,
+                "takeoff_time": 1,
+                "gate": 1,
+                "gate_index": 1,
+                "runway": 1,
+                "runway_index": 1,
+            },
         )
     )
 
     for flight in departed_flights:
         db["flight"].update_one(
             {"flight_id": flight["flight_id"]},
-            {"$set": {"status": "departed"}},
+            {
+                "$set": {
+                    "status": "departed",
+                    # Preserve realized schedule timings for historical views
+                    # after schedule rows are cleaned up.
+                    "landing_time": flight.get("landing_time"),
+                    "gate_arrival": flight.get("gate_arrival"),
+                    "gate_departure": flight.get("gate_departure"),
+                    "takeoff_time": flight.get("takeoff_time"),
+                    "gate": flight.get("gate"),
+                    "gate_index": flight.get("gate_index"),
+                    "runway": flight.get("runway"),
+                    "runway_index": flight.get("runway_index"),
+                }
+            },
         )
 
     db["schedule"].delete_many({"takeoff_time": {"$lt": current_time}})
