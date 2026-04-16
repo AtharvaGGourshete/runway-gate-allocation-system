@@ -97,13 +97,27 @@ def save_schedule_assignments(schedule, version, freeze_end):
         # Keep gate/runway immutable once first assigned for a flight.
         existing = db["schedule"].find_one(
             {"flight_id": s["flight_id"]},
-            {"_id": 0, "gate": 1, "gate_index": 1, "runway": 1, "runway_index": 1},
+            {
+                "_id": 0,
+                "gate": 1,
+                "gate_index": 1,
+                "runway": 1,
+                "runway_index": 1,
+                "landing_runway": 1,
+                "landing_runway_index": 1,
+                "takeoff_runway": 1,
+                "takeoff_runway_index": 1,
+            },
         )
 
         gate_value = s.get("gate")
         gate_index_value = s.get("gate_index")
         runway_value = s.get("runway")
         runway_index_value = s.get("runway_index")
+        landing_runway_value = s.get("landing_runway", runway_value)
+        landing_runway_index_value = s.get("landing_runway_index", runway_index_value)
+        takeoff_runway_value = s.get("takeoff_runway", runway_value)
+        takeoff_runway_index_value = s.get("takeoff_runway_index", runway_index_value)
 
         if existing:
             existing_gate = existing.get("gate")
@@ -120,6 +134,18 @@ def save_schedule_assignments(schedule, version, freeze_end):
             if existing.get("runway_index") is not None:
                 runway_index_value = existing.get("runway_index")
 
+            existing_landing_runway = existing.get("landing_runway")
+            if existing_landing_runway not in (None, ""):
+                landing_runway_value = existing_landing_runway
+            if existing.get("landing_runway_index") is not None:
+                landing_runway_index_value = existing.get("landing_runway_index")
+
+            existing_takeoff_runway = existing.get("takeoff_runway")
+            if existing_takeoff_runway not in (None, ""):
+                takeoff_runway_value = existing_takeoff_runway
+            if existing.get("takeoff_runway_index") is not None:
+                takeoff_runway_index_value = existing.get("takeoff_runway_index")
+
         db["schedule"].update_one(
             {"flight_id": s["flight_id"]},
             {
@@ -132,6 +158,10 @@ def save_schedule_assignments(schedule, version, freeze_end):
                     "takeoff_time": s["takeoff_time"],
                     "runway": runway_value,
                     "runway_index": runway_index_value,
+                    "landing_runway": landing_runway_value,
+                    "landing_runway_index": landing_runway_index_value,
+                    "takeoff_runway": takeoff_runway_value,
+                    "takeoff_runway_index": takeoff_runway_index_value,
                     "frozen": is_frozen,
                     "schedule_version": version,
                     "created_at": datetime.utcnow().timestamp(),

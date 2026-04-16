@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response
 from time import time
 
 import app.services.scheduler_service as scheduler_service
@@ -14,6 +14,12 @@ from app.db.queries import (
 )
 from app.optimization.solver import solve_airport_schedule
 from app.services.analytics_service import get_dashboard_insights, get_flight_details
+from app.services.reporting_service import (
+    get_reporting_summary,
+    get_report_export_rows,
+    csv_bytes_from_rows,
+    pdf_bytes_for_export,
+)
 
 
 dash = Blueprint("health_api", __name__)
@@ -347,6 +353,22 @@ def list_flights():
             return "14/32"
         return ""
 
+    def op_runway_label(item, key_name, key_index, fallback_key="runway", fallback_index="runway_index"):
+        value = str(item.get(key_name) or item.get(fallback_key) or "").strip()
+        if value:
+            return value
+        try:
+            idx = int(item.get(key_index, item.get(fallback_index, -1)))
+        except (TypeError, ValueError):
+            idx = -1
+        if idx == 0:
+            return "16/34"
+        if idx == 1:
+            return "10/28"
+        if idx == 2:
+            return "14/32"
+        return ""
+
     def safe_operational_time(value):
         try:
             t = int(value)
@@ -376,6 +398,14 @@ def list_flights():
             or str(flight.get("runway") or "").strip()
             or str(flight.get("assigned_runway") or "").strip()
         )
+        landing_runway = (
+            op_runway_label(sched, "landing_runway", "landing_runway_index")
+            or runway
+        )
+        takeoff_runway = (
+            op_runway_label(sched, "takeoff_runway", "takeoff_runway_index")
+            or landing_runway
+        )
         priority = str(flight.get("priority") or "normal").strip().lower()
         status = str(flight.get("status") or "unknown").strip().lower()
 
@@ -404,6 +434,8 @@ def list_flights():
             ),
             "gate": gate,
             "runway": runway,
+            "landing_runway": landing_runway,
+            "takeoff_runway": takeoff_runway,
             "delay_minutes": delay_minutes,
             "max_delay": flight.get("max_delay"),
         }
@@ -536,6 +568,82 @@ def dashboard_insights():
             "window_minutes": window,
             **insights,
         }
+    )
+
+
+@dash.route("/reports/summary", methods=["GET"])
+def reports_summary():
+    try:
+        window = int(request.args.get("window", 240))
+    except (TypeError, ValueError):
+        window = 240
+
+    current_time = scheduler_service.simulation_time
+    summary = get_reporting_summary(current_time=current_time, window_minutes=window)
+    return jsonify(
+        {
+            "status": "success",
+            "simulation_time": current_time,
+            "summary": summary,
+        }
+    )
+
+
+@dash.route("/reports/latest-snapshot", methods=["GET"])
+def latest_report_snapshot():
+    db = get_db()
+    row = db["report_snapshot"].find_one({}, {"_id": 0}, sort=[("current_time", -1)])
+    return jsonify(
+        {
+            "status": "success",
+            "snapshot": row or {},
+            "simulation_time": scheduler_service.simulation_time,
+        }
+    )
+
+
+@dash.route("/reports/export/csv", methods=["GET"])
+def reports_export_csv():
+    kind = str(request.args.get("kind", "metrics")).strip().lower()
+    try:
+        window = int(request.args.get("window", 240))
+    except (TypeError, ValueError):
+        window = 240
+
+    current_time = scheduler_service.simulation_time
+    headers, rows = get_report_export_rows(
+        kind=kind,
+        current_time=current_time,
+        window_minutes=window,
+    )
+    payload = csv_bytes_from_rows(headers, rows)
+    filename = f"lszh_{kind}_report_t{current_time}.csv"
+    return Response(
+        payload,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@dash.route("/reports/export/pdf", methods=["GET"])
+def reports_export_pdf():
+    kind = str(request.args.get("kind", "summary")).strip().lower()
+    try:
+        window = int(request.args.get("window", 240))
+    except (TypeError, ValueError):
+        window = 240
+
+    current_time = scheduler_service.simulation_time
+    payload = pdf_bytes_for_export(
+        kind=kind,
+        current_time=current_time,
+        window_minutes=window,
+    )
+    filename = f"lszh_{kind}_report_t{current_time}.pdf"
+    return Response(
+        payload,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -757,5 +865,30 @@ def multi_agent_step():
 
     result = multi_agent_coordinator.step(current_time=t)
     return jsonify(result)
+
+
+@dash.route("/orchestration/step", methods=["POST"])
+def orchestration_step():
+    payload = request.get_json(silent=True) or {}
+    try:
+        t = int(payload.get("time", scheduler_service.simulation_time))
+    except (TypeError, ValueError):
+        t = scheduler_service.simulation_time
+
+    try:
+        report_window = int(payload.get("report_window", 240))
+    except (TypeError, ValueError):
+        report_window = 240
+
+    result = scheduler_service.run_langgraph_orchestration(
+        current_time=t,
+        report_window=report_window,
+    )
+    return jsonify(
+        {
+            "status": "success",
+            "orchestration": result,
+        }
+    )
 
 

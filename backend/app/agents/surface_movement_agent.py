@@ -111,6 +111,10 @@ class SurfaceMovementAgent:
                     "takeoff_time": 1,
                     "runway": 1,
                     "runway_index": 1,
+                    "landing_runway": 1,
+                    "landing_runway_index": 1,
+                    "takeoff_runway": 1,
+                    "takeoff_runway_index": 1,
                 },
             )
         )
@@ -151,20 +155,27 @@ class SurfaceMovementAgent:
             gate_departure = s.get("gate_departure")
             takeoff_time = s.get("takeoff_time")
 
-            runway_node = _runway_node(s.get("runway"), s.get("runway_index"))
+            landing_runway_node = _runway_node(
+                s.get("landing_runway", s.get("runway")),
+                s.get("landing_runway_index", s.get("runway_index")),
+            )
+            takeoff_runway_node = _runway_node(
+                s.get("takeoff_runway", s.get("runway")),
+                s.get("takeoff_runway_index", s.get("runway_index")),
+            )
             gate_node = _gate_node(s.get("gate"))
 
             # Taxi-in: landing_time -> gate_arrival
             if isinstance(landing_time, int) and isinstance(gate_arrival, int):
                 if landing_time <= horizon_end and gate_arrival >= current_time:
                     start = max(current_time, landing_time)
-                    candidates.append((start, "taxi_in", {**s, "start_node": runway_node, "end_node": gate_node}))
+                    candidates.append((start, "taxi_in", {**s, "start_node": landing_runway_node, "end_node": gate_node}))
 
             # Taxi-out: gate_departure -> takeoff_time
             if isinstance(gate_departure, int) and isinstance(takeoff_time, int):
                 if gate_departure <= horizon_end and takeoff_time >= current_time:
                     start = max(current_time, gate_departure)
-                    candidates.append((start, "taxi_out", {**s, "start_node": gate_node, "end_node": runway_node}))
+                    candidates.append((start, "taxi_out", {**s, "start_node": gate_node, "end_node": takeoff_runway_node}))
 
         # Plan in chronological order (simple priority).
         candidates.sort(key=lambda x: (x[0], x[1], x[2].get("flight_id", "")))

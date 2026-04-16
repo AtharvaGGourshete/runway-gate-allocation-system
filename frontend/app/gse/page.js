@@ -195,6 +195,12 @@ export default function GseTurnaroundPage() {
             >
               Flights Center
             </Link>
+            <Link
+              href="/reports"
+              className="px-4 py-2 text-xs font-semibold rounded-xl border border-[#2a2a2a] bg-[#1f1f1f] hover:bg-[#252525]"
+            >
+              Reports
+            </Link>
           </div>
         </div>
 

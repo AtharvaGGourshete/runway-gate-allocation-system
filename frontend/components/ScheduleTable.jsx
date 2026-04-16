@@ -10,11 +10,22 @@ const formatTime = (minutes) => {
   return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
 };
 
-const runwayLabel = (flight) => {
-  const byName = String(flight?.runway || "").trim();
+const landingRunwayLabel = (flight) => {
+  const byName = String(flight?.landing_runway || flight?.runway || "").trim();
   if (byName) return byName;
 
-  const idx = Number(flight?.runway_index);
+  const idx = Number(flight?.landing_runway_index ?? flight?.runway_index);
+  if (idx === 0) return "16/34";
+  if (idx === 1) return "10/28";
+  if (idx === 2) return "14/32";
+  return "--";
+};
+
+const takeoffRunwayLabel = (flight) => {
+  const byName = String(flight?.takeoff_runway || flight?.runway || "").trim();
+  if (byName) return byName;
+
+  const idx = Number(flight?.takeoff_runway_index ?? flight?.runway_index);
   if (idx === 0) return "16/34";
   if (idx === 1) return "10/28";
   if (idx === 2) return "14/32";
@@ -60,7 +71,8 @@ export default function ScheduleTable({ schedule, onFlightClick }) {
             <tr>
               <th className="px-3 py-2 whitespace-nowrap">Flight</th>
               <th className="px-3 py-2 whitespace-nowrap">Arrival</th>
-              <th className="px-3 py-2 whitespace-nowrap">Runway</th>
+              <th className="px-3 py-2 whitespace-nowrap">Land RWY</th>
+              <th className="px-3 py-2 whitespace-nowrap">Tkof RWY</th>
               <th className="px-3 py-2 whitespace-nowrap">Gate</th>
               <th className="px-3 py-2 whitespace-nowrap">Gate Arr</th>
               <th className="px-3 py-2 whitespace-nowrap">Gate Dep</th>
@@ -80,7 +92,13 @@ export default function ScheduleTable({ schedule, onFlightClick }) {
 
                 <td className="px-3 py-3">
                   <span className="px-2 py-0.5 text-[11px] font-medium bg-[#3a272a] text-[#ff9ea6] rounded-full border border-[#5a363d] whitespace-nowrap">
-                    {runwayLabel(flight)}
+                    {landingRunwayLabel(flight)}
+                  </span>
+                </td>
+
+                <td className="px-3 py-3">
+                  <span className="px-2 py-0.5 text-[11px] font-medium bg-[#1f3a29] text-[#97f7bd] rounded-full border border-[#2f5a3f] whitespace-nowrap">
+                    {takeoffRunwayLabel(flight)}
                   </span>
                 </td>
 

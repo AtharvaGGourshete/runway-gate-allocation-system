@@ -133,6 +133,12 @@ export default function DashboardPage() {
             >
               GSE Center
             </Link>
+            <Link
+              href="/reports"
+              className="px-3 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#1f1f1f] text-[#f7c576] hover:bg-[#252525] transition"
+            >
+              Reports
+            </Link>
             <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="uppercase tracking-widest font-semibold text-[#f7c576]/70">
               Simulation Live

@@ -23,6 +23,7 @@ def solve_airport_schedule(
     current_time,
     planning_horizon=180,
     freeze_window=15,
+    apply_lszh_normal_ops_profile=True,
 ):
     model = cp_model.CpModel()
 
@@ -34,6 +35,21 @@ def solve_airport_schedule(
         1: "10/28",
         2: "14/32",
     }
+
+    # LSZH normal profile (no wind mode):
+    # - Landings on 14/16  -> runway indexes {2, 0}
+    # - Takeoffs on 28/16  -> runway indexes {1, 0}
+    # Note: 10/28 is a physical runway pair; direction-level modeling is out of scope.
+    if apply_lszh_normal_ops_profile:
+        allowed_landing_runways = [idx for idx in (0, 2) if 0 <= idx < R]
+        allowed_takeoff_runways = [idx for idx in (0, 1) if 0 <= idx < R]
+    else:
+        allowed_landing_runways = list(range(R))
+        allowed_takeoff_runways = list(range(R))
+    if not allowed_landing_runways:
+        allowed_landing_runways = list(range(R))
+    if not allowed_takeoff_runways:
+        allowed_takeoff_runways = list(range(R))
 
     gate_intervals_per_gate = [[] for _ in range(G)]
     runway_intervals_per_runway = [[] for _ in range(R)]
@@ -47,12 +63,20 @@ def solve_airport_schedule(
         if landing_time < 0 or landing_time >= freeze_end:
             continue
 
-        runway_index = _coerce_index(frozen.get("runway_index", 0), 0)
+        landing_runway_index = _coerce_index(
+            frozen.get("landing_runway_index", frozen.get("runway_index", 0)),
+            0,
+        )
+        takeoff_runway_index = _coerce_index(
+            frozen.get("takeoff_runway_index", frozen.get("runway_index", 0)),
+            0,
+        )
         gate_index = frozen.get("gate_index")
         if gate_index is None:
             gate_index = _coerce_index(frozen.get("gate", 1), 1) - 1
 
-        runway_index = max(0, min(R - 1, runway_index))
+        landing_runway_index = max(0, min(R - 1, landing_runway_index))
+        takeoff_runway_index = max(0, min(R - 1, takeoff_runway_index))
         gate_index = max(0, min(G - 1, _coerce_index(gate_index, 0)))
 
         gate_arrival = _coerce_time(frozen.get("gate_arrival", landing_time), landing_time)
@@ -63,10 +87,22 @@ def solve_airport_schedule(
         if gate_departure <= gate_arrival:
             gate_departure = gate_arrival + 1
 
-        takeoff_time = _coerce_time(
-            frozen.get("takeoff_time", gate_departure),
+        # For frozen flights, runway occupancy must start at takeoff start
+        # (gate departure), not at takeoff end.
+        takeoff_duration = max(1, _coerce_time(frozen.get("takeoff_duration", 5), 5))
+        takeoff_start = _coerce_time(
+            frozen.get(
+                "takeoff_start",
+                frozen.get("gate_departure", frozen.get("takeoff_time", gate_departure)),
+            ),
             gate_departure,
         )
+        takeoff_time = _coerce_time(
+            frozen.get("takeoff_time", takeoff_start + takeoff_duration),
+            takeoff_start + takeoff_duration,
+        )
+        if takeoff_start < gate_departure:
+            takeoff_start = gate_departure
 
         landing_interval = model.NewIntervalVar(
             landing_time,
@@ -74,7 +110,7 @@ def solve_airport_schedule(
             landing_time + 5,
             f"frozen_landing_{frozen['flight_id']}",
         )
-        runway_intervals_per_runway[runway_index].append(landing_interval)
+        runway_intervals_per_runway[landing_runway_index].append(landing_interval)
 
         gate_interval = model.NewIntervalVar(
             gate_arrival,
@@ -85,12 +121,12 @@ def solve_airport_schedule(
         gate_intervals_per_gate[gate_index].append(gate_interval)
 
         takeoff_interval = model.NewIntervalVar(
-            takeoff_time,
-            5,
-            takeoff_time + 5,
+            takeoff_start,
+            takeoff_duration,
+            takeoff_start + takeoff_duration,
             f"frozen_takeoff_{frozen['flight_id']}",
         )
-        runway_intervals_per_runway[runway_index].append(takeoff_interval)
+        runway_intervals_per_runway[takeoff_runway_index].append(takeoff_interval)
 
     for i, p in enumerate(flights):
         scheduled_arrival = _coerce_time(p.get("scheduled_arrival", current_time), current_time)
@@ -116,13 +152,24 @@ def solve_airport_schedule(
         model.Add(delay == land_start - scheduled_arrival)
         total_delay.append(delay)
 
-        runway_var = model.NewIntVar(0, R - 1, f"runway_{i}")
+        landing_runway_var = model.NewIntVar(0, R - 1, f"landing_runway_{i}")
+        takeoff_runway_var = model.NewIntVar(0, R - 1, f"takeoff_runway_{i}")
+
+        # Restrict operation types to LSZH profile runways.
+        if len(allowed_landing_runways) == 1:
+            model.Add(landing_runway_var == allowed_landing_runways[0])
+        else:
+            model.AddAllowedAssignments([landing_runway_var], [[r] for r in allowed_landing_runways])
+        if len(allowed_takeoff_runways) == 1:
+            model.Add(takeoff_runway_var == allowed_takeoff_runways[0])
+        else:
+            model.AddAllowedAssignments([takeoff_runway_var], [[r] for r in allowed_takeoff_runways])
 
         for r in range(R):
-            is_on_runway = model.NewBoolVar(f"is_f{i}_r{r}")
+            is_on_runway = model.NewBoolVar(f"is_land_f{i}_r{r}")
 
-            model.Add(runway_var == r).OnlyEnforceIf(is_on_runway)
-            model.Add(runway_var != r).OnlyEnforceIf(is_on_runway.Not())
+            model.Add(landing_runway_var == r).OnlyEnforceIf(is_on_runway)
+            model.Add(landing_runway_var != r).OnlyEnforceIf(is_on_runway.Not())
 
             landing_optional = model.NewOptionalIntervalVar(
                 land_start,
@@ -170,8 +217,8 @@ def solve_airport_schedule(
         for r in range(R):
             is_on_runway = model.NewBoolVar(f"is_takeoff_f{i}_r{r}")
 
-            model.Add(runway_var == r).OnlyEnforceIf(is_on_runway)
-            model.Add(runway_var != r).OnlyEnforceIf(is_on_runway.Not())
+            model.Add(takeoff_runway_var == r).OnlyEnforceIf(is_on_runway)
+            model.Add(takeoff_runway_var != r).OnlyEnforceIf(is_on_runway.Not())
 
             takeoff_optional = model.NewOptionalIntervalVar(
                 takeoff_start,
@@ -191,7 +238,8 @@ def solve_airport_schedule(
             "gate_end": gate_end,
             "takeoff_start": takeoff_start,
             "takeoff_end": takeoff_end,
-            "runway_var": runway_var,
+            "landing_runway_var": landing_runway_var,
+            "takeoff_runway_var": takeoff_runway_var,
         }
 
     for r in range(R):
@@ -215,7 +263,8 @@ def solve_airport_schedule(
     schedule = []
 
     for i in results:
-        runway_index = solver.Value(results[i]["runway_var"])
+        landing_runway_index = solver.Value(results[i]["landing_runway_var"])
+        takeoff_runway_index = solver.Value(results[i]["takeoff_runway_var"])
         gate_index = solver.Value(results[i]["gate_var"])
 
         schedule.append(
@@ -226,9 +275,16 @@ def solve_airport_schedule(
                 "gate_index": gate_index,
                 "gate_arrival": solver.Value(results[i]["gate_start"]),
                 "gate_departure": solver.Value(results[i]["gate_end"]),
+                "takeoff_start": solver.Value(results[i]["takeoff_start"]),
                 "takeoff_time": solver.Value(results[i]["takeoff_end"]),
-                "runway_index": runway_index,
-                "runway": RUNWAY_MAP.get(runway_index, "Unknown"),
+                # Backward-compatible fields (landing runway by default)
+                "runway_index": landing_runway_index,
+                "runway": RUNWAY_MAP.get(landing_runway_index, "Unknown"),
+                # Explicit operation-specific runway assignments
+                "landing_runway_index": landing_runway_index,
+                "landing_runway": RUNWAY_MAP.get(landing_runway_index, "Unknown"),
+                "takeoff_runway_index": takeoff_runway_index,
+                "takeoff_runway": RUNWAY_MAP.get(takeoff_runway_index, "Unknown"),
             }
         )
 

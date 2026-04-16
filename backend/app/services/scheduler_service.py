@@ -1,13 +1,23 @@
-﻿import json
+import json
 import os
 import time
 import traceback
+from typing import Any, Dict, TypedDict
 
 from app.db.mongo import get_db
 from app.db.queries import get_committed_schedule, save_schedule_assignments, save_schedule_version
 from app.optimization.solver import solve_airport_schedule
 from app.simulation.gates_from_geojson import gate_ids, gate_index_to_id
 from app.agents.multi_agent_coordinator import coordinator as multi_agent_coordinator
+from app.services.reporting_service import get_reporting_summary
+
+try:
+    from langgraph.graph import StateGraph, END
+    _LANGGRAPH_AVAILABLE = True
+except Exception:
+    StateGraph = None
+    END = None
+    _LANGGRAPH_AVAILABLE = False
 
 simulation_time = 0
 
@@ -19,6 +29,16 @@ _feed_loaded = False
 _feed_rows = []
 _feed_cursor = 0
 _geojson_runways = []
+_service_graph = None
+
+
+class ServiceGraphState(TypedDict, total=False):
+    current_time: int
+    report_window: int
+    scheduler: Dict[str, Any]
+    gse: Dict[str, Any]
+    surface: Dict[str, Any]
+    reporting: Dict[str, Any]
 
 
 def _data_file_path() -> str:
@@ -323,6 +343,16 @@ def _normalize_solver_schedule(schedule_rows: list[dict]) -> list[dict]:
             runway = "16/34" if runway_index == 0 else ("10/28" if runway_index == 1 else "14/32")
         item["runway"] = runway
 
+        landing_runway = str(item.get("landing_runway") or "").strip() or runway
+        landing_runway_index = _safe_int(item.get("landing_runway_index", item.get("runway_index", 0)), 0)
+        takeoff_runway = str(item.get("takeoff_runway") or "").strip() or landing_runway
+        takeoff_runway_index = _safe_int(item.get("takeoff_runway_index", landing_runway_index), landing_runway_index)
+
+        item["landing_runway"] = landing_runway
+        item["landing_runway_index"] = int(landing_runway_index)
+        item["takeoff_runway"] = takeoff_runway
+        item["takeoff_runway_index"] = int(takeoff_runway_index)
+
         out.append(item)
 
     return out
@@ -345,6 +375,10 @@ def cleanup_departed_flights(current_time):
                 "gate_index": 1,
                 "runway": 1,
                 "runway_index": 1,
+                "landing_runway": 1,
+                "landing_runway_index": 1,
+                "takeoff_runway": 1,
+                "takeoff_runway_index": 1,
             },
         )
     )
@@ -365,6 +399,10 @@ def cleanup_departed_flights(current_time):
                     "gate_index": flight.get("gate_index"),
                     "runway": flight.get("runway"),
                     "runway_index": flight.get("runway_index"),
+                    "landing_runway": flight.get("landing_runway"),
+                    "landing_runway_index": flight.get("landing_runway_index"),
+                    "takeoff_runway": flight.get("takeoff_runway"),
+                    "takeoff_runway_index": flight.get("takeoff_runway_index"),
                 }
             },
         )
@@ -403,6 +441,162 @@ def run_scheduler(current_time):
     save_schedule_assignments(normalized_schedule, version, current_time + freeze_window)
 
 
+def _scheduler_node(state: ServiceGraphState) -> ServiceGraphState:
+    current_time = int(state.get("current_time", 0))
+    try:
+        run_scheduler(current_time)
+        cleanup_departed_flights(current_time)
+        return {
+            "scheduler": {
+                "status": "success",
+                "current_time": current_time,
+            }
+        }
+    except Exception as e:
+        return {
+            "scheduler": {
+                "status": "error",
+                "error": str(e),
+            }
+        }
+
+
+def _gse_dispatch_node(state: ServiceGraphState) -> ServiceGraphState:
+    current_time = int(state.get("current_time", 0))
+    try:
+        gse_result = multi_agent_coordinator.resource_agent.step(current_time=current_time)
+        return {"gse": gse_result}
+    except Exception as e:
+        return {
+            "gse": {
+                "status": "error",
+                "error": str(e),
+            }
+        }
+
+
+def _surface_movement_node(state: ServiceGraphState) -> ServiceGraphState:
+    current_time = int(state.get("current_time", 0))
+    try:
+        surface_result = multi_agent_coordinator.surface_agent.step(current_time=current_time)
+        return {"surface": surface_result}
+    except Exception as e:
+        return {
+            "surface": {
+                "status": "error",
+                "error": str(e),
+            }
+        }
+
+
+def _reporting_node(state: ServiceGraphState) -> ServiceGraphState:
+    current_time = int(state.get("current_time", 0))
+    report_window = max(60, int(state.get("report_window", 240)))
+    try:
+        summary = get_reporting_summary(current_time=current_time, window_minutes=report_window)
+        db = get_db()
+        db["report_snapshot"].update_one(
+            {"current_time": current_time},
+            {
+                "$set": {
+                    "current_time": current_time,
+                    "generated_at": time.time(),
+                    "summary": summary,
+                }
+            },
+            upsert=True,
+        )
+        return {
+            "reporting": {
+                "status": "success",
+                "window_minutes": report_window,
+                "kpis": summary.get("kpis", {}),
+                "resource_snapshot": summary.get("resource_snapshot", {}),
+                "summary": summary,
+            }
+        }
+    except Exception as e:
+        return {
+            "reporting": {
+                "status": "error",
+                "error": str(e),
+            }
+        }
+
+
+def _build_service_graph():
+    graph = StateGraph(ServiceGraphState)
+    graph.add_node("scheduler_service", _scheduler_node)
+    graph.add_node("gse_dispatch", _gse_dispatch_node)
+    graph.add_node("surface_movement", _surface_movement_node)
+    graph.add_node("reporting_module", _reporting_node)
+
+    graph.set_entry_point("scheduler_service")
+    graph.add_edge("scheduler_service", "gse_dispatch")
+    graph.add_edge("gse_dispatch", "surface_movement")
+    graph.add_edge("surface_movement", "reporting_module")
+    graph.add_edge("reporting_module", END)
+    return graph.compile()
+
+
+def run_langgraph_orchestration(current_time: int, report_window: int = 240) -> ServiceGraphState:
+    global _service_graph
+
+    if not _LANGGRAPH_AVAILABLE:
+        # Safe fallback preserving same service order.
+        scheduler_state = _scheduler_node({"current_time": current_time})
+        gse_state = _gse_dispatch_node({"current_time": current_time})
+        surface_state = _surface_movement_node({"current_time": current_time})
+        reporting_state = _reporting_node(
+            {"current_time": current_time, "report_window": report_window}
+        )
+        result = {
+            "current_time": current_time,
+            "report_window": report_window,
+            "scheduler": scheduler_state.get("scheduler", {}),
+            "gse": gse_state.get("gse", {}),
+            "surface": surface_state.get("surface", {}),
+            "reporting": reporting_state.get("reporting", {}),
+            "engine": "fallback",
+        }
+        try:
+            db = get_db()
+            db["report_snapshot"].update_one(
+                {"current_time": int(current_time)},
+                {"$set": {"current_time": int(current_time), "generated_at": time.time(), **result}},
+                upsert=True,
+            )
+        except Exception:
+            pass
+        return result
+
+    if _service_graph is None:
+        _service_graph = _build_service_graph()
+
+    state: ServiceGraphState = {
+        "current_time": int(current_time),
+        "report_window": int(report_window),
+    }
+    result = _service_graph.invoke(state)
+    result["engine"] = "langgraph"
+    try:
+        db = get_db()
+        db["report_snapshot"].update_one(
+            {"current_time": int(current_time)},
+            {
+                "$set": {
+                    "current_time": int(current_time),
+                    "generated_at": time.time(),
+                    **result,
+                }
+            },
+            upsert=True,
+        )
+    except Exception:
+        pass
+    return result
+
+
 def scheduler_loop():
     global simulation_time
 
@@ -415,13 +609,19 @@ def scheduler_loop():
             if inserted:
                 print(f"Inserted flights this tick: {inserted}")
 
-            run_scheduler(current_time)
-            cleanup_departed_flights(current_time)
-
-            try:
-                multi_agent_coordinator.step(current_time=current_time)
-            except Exception as e:
-                print("Multi-agent step error:", e)
+            orchestration = run_langgraph_orchestration(current_time=current_time, report_window=240)
+            scheduler_status = (orchestration.get("scheduler") or {}).get("status")
+            if scheduler_status == "error":
+                print("Scheduler node error:", (orchestration.get("scheduler") or {}).get("error"))
+            gse_status = (orchestration.get("gse") or {}).get("status")
+            if gse_status == "error":
+                print("GSE node error:", (orchestration.get("gse") or {}).get("error"))
+            surface_status = (orchestration.get("surface") or {}).get("status")
+            if surface_status == "error":
+                print("Surface node error:", (orchestration.get("surface") or {}).get("error"))
+            reporting_status = (orchestration.get("reporting") or {}).get("status")
+            if reporting_status == "error":
+                print("Reporting node error:", (orchestration.get("reporting") or {}).get("error"))
 
             print("Sim Time:", simulation_time)
 

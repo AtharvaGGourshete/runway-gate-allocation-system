@@ -20,6 +20,26 @@ const formatOperationalTime = (minutes) => {
   return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 };
 
+const landingRunwayLabel = (flight) => {
+  const byName = String(flight?.landing_runway || flight?.runway || "").trim();
+  if (byName) return byName;
+  const idx = Number(flight?.landing_runway_index ?? flight?.runway_index);
+  if (idx === 0) return "16/34";
+  if (idx === 1) return "10/28";
+  if (idx === 2) return "14/32";
+  return "--";
+};
+
+const takeoffRunwayLabel = (flight) => {
+  const byName = String(flight?.takeoff_runway || flight?.runway || "").trim();
+  if (byName) return byName;
+  const idx = Number(flight?.takeoff_runway_index ?? flight?.runway_index);
+  if (idx === 0) return "16/34";
+  if (idx === 1) return "10/28";
+  if (idx === 2) return "14/32";
+  return "--";
+};
+
 const PRIORITY_OPTIONS = [
   { value: "normal", label: "Normal" },
   { value: "vip", label: "VIP" },
@@ -217,6 +237,12 @@ export default function FlightsControlCenterPage() {
             >
               GSE Center
             </Link>
+            <Link
+              href="/reports"
+              className="px-4 py-2 text-xs font-semibold rounded-xl border border-[#2a2a2a] bg-[#1f1f1f] hover:bg-[#252525]"
+            >
+              Reports
+            </Link>
           </div>
         </div>
 
@@ -338,7 +364,8 @@ export default function FlightsControlCenterPage() {
                     {/* <th className="text-left px-3 py-2">Priority</th> */}
                     <th className="text-left px-3 py-2">Sched Arr</th>
                     <th className="text-left px-3 py-2">Landing</th>
-                    <th className="text-left px-3 py-2">Runway</th>
+                    <th className="text-left px-3 py-2">Land RWY</th>
+                    <th className="text-left px-3 py-2">Tkof RWY</th>
                     <th className="text-left px-3 py-2">Gate</th>
                     <th className="text-left px-3 py-2">Delay</th>
                     <th className="text-left px-3 py-2">Takeoff</th>
@@ -347,7 +374,7 @@ export default function FlightsControlCenterPage() {
                 <tbody className="text-[#f7c576]">
                   {flights.length === 0 && (
                     <tr>
-                      <td className="px-3 py-4 text-[#f7c576]/60" colSpan={9}>
+                      <td className="px-3 py-4 text-[#f7c576]/60" colSpan={10}>
                         No flights match the selected filters.
                       </td>
                     </tr>
@@ -378,7 +405,8 @@ export default function FlightsControlCenterPage() {
                       </td> */}
                       <td className="px-3 py-3 text-[#f7c576]/85">{formatTime(f.scheduled_arrival)}</td>
                       <td className="px-3 py-3 text-[#f7c576]/85">{formatOperationalTime(f.landing_time)}</td>
-                      <td className="px-3 py-3">{f.runway || "--"}</td>
+                      <td className="px-3 py-3">{landingRunwayLabel(f)}</td>
+                      <td className="px-3 py-3">{takeoffRunwayLabel(f)}</td>
                       <td className="px-3 py-3">{f.gate || "--"}</td>
                       <td className="px-3 py-3 text-[#f7c576]/85">
                         {f.delay_minutes == null ? "--" : `${Math.max(0, Number(f.delay_minutes))}m`}
@@ -423,4 +451,3 @@ export default function FlightsControlCenterPage() {
     </div>
   );
 }
-
