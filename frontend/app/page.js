@@ -93,17 +93,7 @@ export default function Home() {
                 <PlaneTakeoff />
                 <span className="text-[#FFDAB9]">Skyslot</span>
               </div>
-              <ul className="flex gap-8 font-medium">
-                <li className="cursor-pointer hover:text-[#FFDAB9] transition">
-                  Home
-                </li>
-                <li className="cursor-pointer hover:text-[#FFDAB9] transition">
-                  Simulation
-                </li>
-                <li className="cursor-pointer hover:text-[#FFDAB9] transition">
-                  Documentation
-                </li>
-              </ul>
+              
               <Link href={"./dashboard"}>
               <button className="bg-[#FFDAB9] text-black px-5 py-2 rounded-3xl transition cursor-pointer">
                 Analytics
