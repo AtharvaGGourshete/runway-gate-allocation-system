@@ -14,25 +14,11 @@ const Footer = () => {
                 Sky<span className="text-[#f7c576]">slot</span>
               </span>
             </div>
-            <p className="text-gray-400 text-sm leading-relaxed mb-6 text-center tracking-tighter">
+            <p className="text-gray-400 text-sm leading-relaxed mb-6 text-center">
               Next-generation airport coordination. Leveraging Multi-Agent
               Systems to bridge the gap between tarmac complexity and autonomous
               precision.
             </p>
-            <div className="flex gap-4 justify-center">
-              <Github
-                className="text-gray-500 hover:text-[#f7c576] cursor-pointer transition-colors"
-                size={20}
-              />
-              <Twitter
-                className="text-gray-500 hover:text-[#f7c576] cursor-pointer transition-colors"
-                size={20}
-              />
-              <Linkedin
-                className="text-gray-500 hover:text-[#f7c576] cursor-pointer transition-colors"
-                size={20}
-              />
-            </div>
           </div>
         </div>
 
